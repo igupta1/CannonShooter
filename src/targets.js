@@ -7,25 +7,42 @@ import * as THREE from 'three';
 import { randomInRange, pingPong } from './utils.js';
 
 const targets = [];
-const TARGET_HEIGHT = 2; // Height above ground
+const TARGET_HEIGHT = 0.3; // Height slightly above water surface
+
+// Movement parameters
+const SHIP_RADIUS = 4.0; // Safe radius around each ship (prevents touching)
+const GRID_SPACING = 10; // Distance between ship centers (must be > 2 * SHIP_RADIUS)
+const MOVEMENT_RADIUS = 1.5; // How far ships move from their center position
 
 /**
- * Spawns multiple targets at random positions
+ * Spawns multiple targets in organized rows
  * @param {THREE.Scene} scene - Scene to add targets to
  * @param {number} count - Number of targets to spawn
  */
 export function spawnTargets(scene, count) {
-    for (let i = 0; i < count; i++) {
-        spawnTarget(scene, i >= count / 2); // At least half are moving
+    // Calculate grid dimensions - 6 ships per row
+    const shipsPerRow = 6;
+    const numRows = Math.ceil(count / shipsPerRow);
+    let shipIndex = 0;
+
+    for (let row = 0; row < numRows && shipIndex < count; row++) {
+        const shipsInThisRow = Math.min(shipsPerRow, count - shipIndex);
+        for (let col = 0; col < shipsInThisRow && shipIndex < count; col++) {
+            spawnTarget(scene, row, col, shipsPerRow, numRows);
+            shipIndex++;
+        }
     }
 }
 
 /**
  * Spawns a single navy ship target
  * @param {THREE.Scene} scene - Scene to add target to
- * @param {boolean} isMoving - Whether the target moves
+ * @param {number} row - Row index
+ * @param {number} col - Column index within the row
+ * @param {number} shipsPerRow - Total ships per row
+ * @param {number} numRows - Total number of rows
  */
-function spawnTarget(scene, isMoving) {
+function spawnTarget(scene, row, col, shipsPerRow, numRows) {
     // Create a group for the navy ship
     const shipGroup = new THREE.Group();
     
@@ -43,7 +60,7 @@ function spawnTarget(scene, isMoving) {
         metalness: 0.4
     });
     const hullMesh = new THREE.Mesh(hullGeometry, hullMaterial);
-    hullMesh.position.y = 0;
+    hullMesh.position.y = 0.4; // Match player ship hull height for water level
     hullMesh.castShadow = true;
     hullMesh.receiveShadow = true;
     shipGroup.add(hullMesh);
@@ -120,24 +137,35 @@ function spawnTarget(scene, isMoving) {
     bowMesh.position.set(0, 0, -1.9);
     bowMesh.castShadow = true;
     shipGroup.add(bowMesh);
-    
-    // Random lane (x position) and distance (z position)
-    const lane = randomInRange(-15, 15);
-    const distance = randomInRange(-30, -10);
-    
-    shipGroup.position.set(lane, TARGET_HEIGHT, distance);
+
+    // Calculate center position in grid
+    // Center the entire grid around x=0, z=-35 (farther from player)
+    const gridWidthHalf = ((shipsPerRow - 1) * GRID_SPACING) / 2;
+    const gridDepthHalf = ((numRows - 1) * GRID_SPACING) / 2;
+
+    const centerX = (col * GRID_SPACING) - gridWidthHalf;
+    const centerZ = -35 - (row * GRID_SPACING) + gridDepthHalf;
+
+    shipGroup.position.set(centerX, TARGET_HEIGHT, centerZ);
     
     scene.add(shipGroup);
     
     // Store target data
     const target = {
         mesh: shipGroup,
-        isMoving,
-        lane,
-        distance,
-        movementRange: randomInRange(5, 10),
-        movementSpeed: randomInRange(1, 3),
-        movementTime: Math.random() * 100,
+        isMoving: true, // All ships move
+        centerX: centerX, // Center position of this ship
+        centerZ: centerZ, // Center Z position
+        row: row,
+        col: col,
+        movementRadius: MOVEMENT_RADIUS,
+        // Random speeds for X and Z movement (independent)
+        speedX: randomInRange(0.5, 1.2),
+        speedZ: randomInRange(0.5, 1.2),
+        // Random phase offsets so ships don't move in sync
+        phaseX: Math.random() * Math.PI * 2,
+        phaseZ: Math.random() * Math.PI * 2,
+        movementTime: 0,
         originalColor: hullMaterial.color.clone(),
         hullMaterial: hullMaterial, // Store for color animation
         hitTime: 0,
@@ -153,15 +181,23 @@ function spawnTarget(scene, isMoving) {
  */
 export function updateTargets(deltaTime) {
     const currentTime = performance.now() / 1000;
-    
+
     for (const target of targets) {
+        // Skip destroyed targets
+        if (target.destroyed) continue;
+
         if (target.isMoving) {
             // Update movement time
-            target.movementTime += deltaTime * target.movementSpeed;
-            
-            // Oscillate left-right using ping-pong
-            const offset = pingPong(target.movementTime, target.movementRange) - target.movementRange / 2;
-            target.mesh.position.x = target.lane + offset;
+            target.movementTime += deltaTime;
+
+            // Calculate X and Z offsets using sine waves with independent speeds and phases
+            const offsetX = Math.sin(target.movementTime * target.speedX + target.phaseX) * target.movementRadius;
+            const offsetZ = Math.sin(target.movementTime * target.speedZ + target.phaseZ) * target.movementRadius;
+
+            // Update position: oscillate around center position
+            target.mesh.position.x = target.centerX + offsetX;
+            target.mesh.position.z = target.centerZ + offsetZ;
+            target.mesh.position.y = TARGET_HEIGHT;
         }
         
         // Handle hit animation (flash and scale)
@@ -191,19 +227,21 @@ export function updateTargets(deltaTime) {
  * @param {Object} target - Target to reset
  */
 export function resetTarget(target) {
-    target.lane = randomInRange(-15, 15);
-    target.distance = randomInRange(-30, -10);
-    target.mesh.position.set(target.lane, TARGET_HEIGHT, target.distance);
-    
+    // Reset to center position
+    target.mesh.position.set(target.centerX, TARGET_HEIGHT, target.centerZ);
+
     // Keep navy ship color consistent (don't randomize)
     target.hullMaterial.color.copy(target.originalColor);
-    
-    // Reset movement parameters
-    target.movementRange = randomInRange(5, 10);
-    target.movementSpeed = randomInRange(1, 3);
-    target.movementTime = Math.random() * 100;
-    
+
+    // Reset movement parameters with new random values
+    target.speedX = randomInRange(0.5, 1.2);
+    target.speedZ = randomInRange(0.5, 1.2);
+    target.phaseX = Math.random() * Math.PI * 2;
+    target.phaseZ = Math.random() * Math.PI * 2;
+    target.movementTime = 0;
+
     target.mesh.scale.set(1, 1, 1);
+    target.mesh.rotation.y = 0;
 }
 
 /**
@@ -230,8 +268,20 @@ export function getTargets() {
 export function clearAllTargets(scene) {
     for (const target of targets) {
         scene.remove(target.mesh);
-        target.mesh.geometry.dispose();
-        target.mesh.material.dispose();
+
+        // Traverse the ship group and dispose of all geometries and materials
+        target.mesh.traverse((child) => {
+            if (child.geometry) {
+                child.geometry.dispose();
+            }
+            if (child.material) {
+                if (Array.isArray(child.material)) {
+                    child.material.forEach(mat => mat.dispose());
+                } else {
+                    child.material.dispose();
+                }
+            }
+        });
     }
     targets.length = 0;
 }

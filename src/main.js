@@ -3,7 +3,7 @@
  * Bootstraps the game and runs the main update loop
  */
 
-import { createScene, handleResize, scene, camera, renderer, controls } from './scene.js';
+import { createScene, handleResize, scene, camera, renderer, controls, updateWater, updateShipWakes } from './scene.js';
 import { createCannon, setYawPitch, getMuzzlePosition, getFiringDirection } from './cannon.js';
 import { spawnProjectile, updateProjectiles, getProjectiles, clearAllProjectiles, killProjectile, despawnProjectile } from './projectile.js';
 import { spawnTargets, updateTargets, getTargets, clearAllTargets, resetTarget, hitTarget } from './targets.js';
@@ -21,7 +21,7 @@ let lastFrameTime = 0;
 const GAME_DURATION = 60; // seconds
 const MIN_POWER = 10;
 const MAX_POWER = 40;
-const TARGET_COUNT = 8;
+const TARGET_COUNT = 18; // 3 rows of 6 boats
 
 /**
  * Initializes the game
@@ -120,23 +120,27 @@ function updateGame(currentTime, deltaTime) {
     updateAiming(deltaTime);
     const { yaw, pitch } = getAimAngles();
     setYawPitch(yaw, pitch);
-    
+
     // Update charging
     const charge = updateCharging(currentTime);
     updatePowerBar(charge);
-    
+
     // Check for firing
     const fireCharge = checkFire();
     if (fireCharge !== null && fireCharge > 0) {
         fireCannon(fireCharge);
     }
-    
+
     // Update projectiles with physics
     updateProjectiles(deltaTime, scene);
-    
+
     // Update targets
     updateTargets(deltaTime);
-    
+
+    // Update water animation and ship wakes
+    updateWater(deltaTime);
+    updateShipWakes(getTargets());
+
     // Check collisions
     checkCollisions();
 }
@@ -176,8 +180,11 @@ function checkCollisions() {
         };
         
         for (const target of targets) {
+            // Skip destroyed targets
+            if (target.destroyed) continue;
+
             const bounds = getAABBFromMesh(target.mesh);
-            
+
             if (sphereVsAABB(projPos, proj.radius, bounds.min, bounds.max)) {
                 // Hit detected!
                 onTargetHit(target);
@@ -196,14 +203,27 @@ function onTargetHit(target) {
     // Increment score
     score++;
     updateScore(score);
-    
-    // Trigger hit animation
-    hitTarget(target);
-    
-    // Reset target to new position after a delay
-    setTimeout(() => {
-        resetTarget(target);
-    }, 300);
+
+    // Mark target as destroyed (stop moving and hide)
+    target.isMoving = false;
+    target.destroyed = true;
+
+    // Remove ship from scene
+    scene.remove(target.mesh);
+
+    // Dispose of geometries and materials
+    target.mesh.traverse((child) => {
+        if (child.geometry) {
+            child.geometry.dispose();
+        }
+        if (child.material) {
+            if (Array.isArray(child.material)) {
+                child.material.forEach(mat => mat.dispose());
+            } else {
+                child.material.dispose();
+            }
+        }
+    });
 }
 
 /**
