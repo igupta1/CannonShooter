@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cannon Shooter - CS174A Project</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Game Canvas Container -->
+    <div id="game-container"></div>
+    
+    <!-- HUD Overlay -->
+    <div id="hud">
+        <div id="hud-top">
+            <div id="score-display">Score: <span id="score">0</span></div>
+            <div id="timer-display">Time: <span id="timer">60</span>s</div>
+        </div>
+        <div id="power-container">
+            <div id="power-bar"></div>
+        </div>
+        <div id="instructions">
+            <p>W/A/S/D to aim | Hold mouse & release to fire | R to restart</p>
+        </div>
+    </div>
+    
+    <!-- Game Over Overlay -->
+    <div id="game-over" class="hidden">
+        <div id="game-over-content">
+            <h1>Time's Up!</h1>
+            <p>Final Score: <span id="final-score">0</span></p>
+            <button id="restart-btn">Restart Game</button>
+        </div>
+    </div>
+
+    <!-- Three.js from CDN -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    
+    <!-- Main Game Module -->
+    <script type="module" src="../src/main.js"></script>
+</body>
+</html>
+
