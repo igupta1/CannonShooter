@@ -13,10 +13,10 @@ let scene, camera, renderer, controls;
  * @param {HTMLElement} container - DOM element to attach renderer to
  */
 export function createScene(container) {
-    // Create scene
+    // Create scene - ocean theme
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB); // Sky blue
-    scene.fog = new THREE.Fog(0x87CEEB, 20, 100);
+    scene.fog = new THREE.Fog(0x87CEEB, 30, 120);
     
     // Create camera - positioned behind cannon looking toward blocks
     camera = new THREE.PerspectiveCamera(
@@ -87,26 +87,26 @@ function addLights() {
 }
 
 /**
- * Adds a ground plane that receives shadows
+ * Adds an ocean plane that receives shadows
  */
 function addGround() {
-    const groundGeometry = new THREE.PlaneGeometry(100, 100);
-    const groundMaterial = new THREE.MeshStandardMaterial({
-        color: 0x228B22,
-        roughness: 0.8,
-        metalness: 0.2
+    const waterGeometry = new THREE.PlaneGeometry(200, 200);
+    const waterMaterial = new THREE.MeshStandardMaterial({
+        color: 0x1e90ff, // Ocean blue
+        roughness: 0.2,
+        metalness: 0.6
     });
     
-    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-    ground.rotation.x = -Math.PI / 2; // Rotate to be horizontal
-    ground.receiveShadow = true;
-    ground.position.y = 0;
+    const water = new THREE.Mesh(waterGeometry, waterMaterial);
+    water.rotation.x = -Math.PI / 2; // Rotate to be horizontal
+    water.receiveShadow = true;
+    water.position.y = 0;
     
-    scene.add(ground);
+    scene.add(water);
     
-    // Add grid helper for reference
-    const gridHelper = new THREE.GridHelper(100, 50, 0x000000, 0x444444);
-    gridHelper.material.opacity = 0.2;
+    // Add subtle grid to show water movement (optional)
+    const gridHelper = new THREE.GridHelper(200, 100, 0x1e90ff, 0x4169E1);
+    gridHelper.material.opacity = 0.15;
     gridHelper.material.transparent = true;
     scene.add(gridHelper);
 }

@@ -13,66 +13,134 @@ const MIN_PITCH = 5;  // degrees
 const MAX_PITCH = 70; // degrees
 
 /**
- * Creates a cannon from primitive geometries
- * @param {THREE.Scene} scene - The scene to add the cannon to
- * @returns {Object} Cannon components
+ * Creates a pirate ship from primitive geometries
+ * @param {THREE.Scene} scene - The scene to add the ship to
+ * @returns {Object} Ship components
  */
 export function createCannon(scene) {
     cannonGroup = new THREE.Group();
     
-    // Create base (yaw rotation)
+    // Create base (yaw rotation) - this is the pirate ship hull
     cannonBase = new THREE.Group();
     
-    const baseGeometry = new THREE.CylinderGeometry(1, 1.2, 0.5, 8);
-    const baseMaterial = new THREE.MeshStandardMaterial({
-        color: 0x444444,
-        roughness: 0.7,
-        metalness: 0.5
+    // Ship colors
+    const woodBrown = 0x8B4513;
+    const darkWood = 0x654321;
+    const sailWhite = 0xFFF8DC;
+    
+    // Ship hull - main body
+    const hullGeometry = new THREE.BoxGeometry(2, 0.8, 4);
+    const hullMaterial = new THREE.MeshStandardMaterial({
+        color: woodBrown,
+        roughness: 0.8,
+        metalness: 0.1
     });
-    const baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
-    baseMesh.position.y = 0.25;
-    baseMesh.castShadow = true;
-    cannonBase.add(baseMesh);
+    const hullMesh = new THREE.Mesh(hullGeometry, hullMaterial);
+    hullMesh.position.y = 0.4;
+    hullMesh.castShadow = true;
+    hullMesh.receiveShadow = true;
+    cannonBase.add(hullMesh);
     
-    // Create mounting bracket
-    const bracketGeometry = new THREE.BoxGeometry(0.6, 0.8, 0.6);
-    const bracketMesh = new THREE.Mesh(bracketGeometry, baseMaterial);
-    bracketMesh.position.y = 0.9;
-    bracketMesh.castShadow = true;
-    cannonBase.add(bracketMesh);
+    // Ship deck
+    const deckGeometry = new THREE.BoxGeometry(2.2, 0.2, 4.2);
+    const deckMaterial = new THREE.MeshStandardMaterial({
+        color: darkWood,
+        roughness: 0.9,
+        metalness: 0.05
+    });
+    const deckMesh = new THREE.Mesh(deckGeometry, deckMaterial);
+    deckMesh.position.y = 0.9;
+    deckMesh.castShadow = true;
+    deckMesh.receiveShadow = true;
+    cannonBase.add(deckMesh);
     
-    // Create barrel (pitch rotation)
+    // Ship sides (railings)
+    const railingLeft = new THREE.BoxGeometry(0.1, 0.3, 4);
+    const railingMat = new THREE.MeshStandardMaterial({ color: darkWood, roughness: 0.9 });
+    const leftRail = new THREE.Mesh(railingLeft, railingMat);
+    leftRail.position.set(-1.05, 1.15, 0);
+    leftRail.castShadow = true;
+    cannonBase.add(leftRail);
+    
+    const rightRail = new THREE.Mesh(railingLeft, railingMat);
+    rightRail.position.set(1.05, 1.15, 0);
+    rightRail.castShadow = true;
+    cannonBase.add(rightRail);
+    
+    // Mast (center pole)
+    const mastGeometry = new THREE.CylinderGeometry(0.1, 0.12, 2.5, 8);
+    const mastMaterial = new THREE.MeshStandardMaterial({
+        color: darkWood,
+        roughness: 0.8
+    });
+    const mastMesh = new THREE.Mesh(mastGeometry, mastMaterial);
+    mastMesh.position.set(0, 2.25, 0.5);
+    mastMesh.castShadow = true;
+    cannonBase.add(mastMesh);
+    
+    // Pirate flag at top of mast
+    const flagGeometry = new THREE.BoxGeometry(0.4, 0.3, 0.05);
+    const flagMaterial = new THREE.MeshStandardMaterial({
+        color: 0x000000,
+        roughness: 0.9
+    });
+    const flagMesh = new THREE.Mesh(flagGeometry, flagMaterial);
+    flagMesh.position.set(0, 3.5, 0.5);
+    flagMesh.castShadow = true;
+    cannonBase.add(flagMesh);
+    
+    // Skull on flag (small white sphere)
+    const skullGeometry = new THREE.SphereGeometry(0.08, 8, 8);
+    const skullMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
+    const skullMesh = new THREE.Mesh(skullGeometry, skullMaterial);
+    skullMesh.position.set(0, 3.5, 0.48);
+    skullMesh.castShadow = true;
+    cannonBase.add(skullMesh);
+    
+    // Create cannon barrel (pitch rotation) - mounted on ship
     cannonBarrel = new THREE.Group();
     
-    const barrelGeometry = new THREE.CylinderGeometry(0.25, 0.3, 3, 16);
+    const barrelGeometry = new THREE.CylinderGeometry(0.2, 0.25, 2, 12);
     const barrelMaterial = new THREE.MeshStandardMaterial({
-        color: 0x2c3e50,
+        color: 0x333333,
         roughness: 0.6,
-        metalness: 0.7
+        metalness: 0.8
     });
     const barrelMesh = new THREE.Mesh(barrelGeometry, barrelMaterial);
-    // Rotate cylinder to lie horizontally along Z axis
-    barrelMesh.rotation.x = -Math.PI / 2; // Rotate to point forward along -Z
-    barrelMesh.position.z = -1.5; // Position at end of pivot (negative Z = forward)
+    barrelMesh.rotation.x = -Math.PI / 2;
+    barrelMesh.position.z = -1;
     barrelMesh.castShadow = true;
     cannonBarrel.add(barrelMesh);
     
-    // Add barrel muzzle detail
-    const muzzleGeometry = new THREE.CylinderGeometry(0.3, 0.28, 0.3, 16);
+    // Cannon muzzle
+    const muzzleGeometry = new THREE.CylinderGeometry(0.25, 0.22, 0.3, 12);
     const muzzleMesh = new THREE.Mesh(muzzleGeometry, barrelMaterial);
     muzzleMesh.rotation.x = -Math.PI / 2;
-    muzzleMesh.position.z = -3; // Position at muzzle end
+    muzzleMesh.position.z = -2.2;
     muzzleMesh.castShadow = true;
     cannonBarrel.add(muzzleMesh);
     
-    // Position barrel pivot point
-    cannonBarrel.position.y = 0.9;
+    // Cannon mount wheels
+    const wheelGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.1, 8);
+    const wheelMaterial = new THREE.MeshStandardMaterial({ color: darkWood });
+    const wheel1 = new THREE.Mesh(wheelGeometry, wheelMaterial);
+    wheel1.rotation.z = Math.PI / 2;
+    wheel1.position.set(-0.3, -0.2, -0.5);
+    cannonBarrel.add(wheel1);
+    
+    const wheel2 = new THREE.Mesh(wheelGeometry, wheelMaterial);
+    wheel2.rotation.z = Math.PI / 2;
+    wheel2.position.set(0.3, -0.2, -0.5);
+    cannonBarrel.add(wheel2);
+    
+    // Position cannon on ship deck
+    cannonBarrel.position.set(0, 1.0, -1.5);
     
     // Assemble hierarchy
     cannonBase.add(cannonBarrel);
     cannonGroup.add(cannonBase);
     
-    // Position cannon at origin on ground
+    // Position ship at origin on water
     cannonGroup.position.set(0, 0, 0);
     
     scene.add(cannonGroup);
@@ -101,7 +169,7 @@ export function setYawPitch(yaw, pitch) {
  * @returns {THREE.Vector3} World position of cannon muzzle
  */
 export function getMuzzlePosition() {
-    const muzzleOffset = new THREE.Vector3(0, 0, -3);
+    const muzzleOffset = new THREE.Vector3(0, 0, -2.2);
     cannonBarrel.localToWorld(muzzleOffset);
     return muzzleOffset;
 }
