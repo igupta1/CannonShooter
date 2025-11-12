@@ -3,6 +3,7 @@
  * Implements sphere vs AABB (Axis-Aligned Bounding Box) collision
  */
 
+import * as THREE from 'three';
 import { clamp } from './utils.js';
 
 /**
@@ -30,33 +31,25 @@ export function sphereVsAABB(center, radius, min, max) {
 }
 
 /**
- * Get AABB bounds from a Three.js mesh
- * @param {THREE.Mesh} mesh - The mesh to get bounds from
+ * Get AABB bounds from a Three.js mesh or group
+ * @param {THREE.Mesh|THREE.Group} object - The object to get bounds from
  * @returns {Object} {min: {x, y, z}, max: {x, y, z}}
  */
-export function getAABBFromMesh(mesh) {
-    const geometry = mesh.geometry;
+export function getAABBFromMesh(object) {
+    // Use Three.js Box3 to compute bounding box for groups or meshes
+    const box3 = new THREE.Box3();
+    box3.setFromObject(object);
     
-    // Compute bounding box if not already computed
-    if (!geometry.boundingBox) {
-        geometry.computeBoundingBox();
-    }
-    
-    const box = geometry.boundingBox;
-    const worldPos = mesh.position;
-    const scale = mesh.scale;
-    
-    // Transform local bounding box to world space
     const min = {
-        x: worldPos.x + box.min.x * scale.x,
-        y: worldPos.y + box.min.y * scale.y,
-        z: worldPos.z + box.min.z * scale.z
+        x: box3.min.x,
+        y: box3.min.y,
+        z: box3.min.z
     };
     
     const max = {
-        x: worldPos.x + box.max.x * scale.x,
-        y: worldPos.y + box.max.y * scale.y,
-        z: worldPos.z + box.max.z * scale.z
+        x: box3.max.x,
+        y: box3.max.y,
+        z: box3.max.z
     };
     
     return { min, max };
