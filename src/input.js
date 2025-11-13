@@ -15,7 +15,9 @@ let keysPressed = {
     w: false,
     a: false,
     s: false,
-    d: false
+    d: false,
+    arrowleft: false,
+    arrowright: false
 };
 
 // Aiming parameters
@@ -25,10 +27,13 @@ let pitch = 30; // degrees
 // Configuration
 const MAX_CHARGE_TIME = 1.5; // seconds
 const ROTATION_SPEED = 60; // degrees per second
+const MOVEMENT_SPEED = 8; // units per second for left/right movement
 const MIN_PITCH = 0; // horizontal
 const MAX_PITCH = 90; // straight up
 const MIN_YAW = -Math.PI / 2; // -90 degrees (facing right edge of block area)
 const MAX_YAW = Math.PI / 2;  // +90 degrees (facing left edge of block area)
+const MIN_X_POSITION = -15; // Left boundary
+const MAX_X_POSITION = 15;  // Right boundary
 
 /**
  * Initializes input event listeners
@@ -56,6 +61,10 @@ function onKeyDown(event) {
         keysPressed[key] = true;
         event.preventDefault();
     }
+    if (key === 'arrowleft' || key === 'arrowright') {
+        keysPressed[key] = true;
+        event.preventDefault();
+    }
 }
 
 /**
@@ -67,6 +76,10 @@ function onKeyUp(event) {
         keysPressed[key] = false;
         event.preventDefault();
     }
+    if (key === 'arrowleft' || key === 'arrowright') {
+        keysPressed[key] = false;
+        event.preventDefault();
+    }
 }
 
 /**
@@ -75,30 +88,52 @@ function onKeyUp(event) {
  */
 export function updateAiming(deltaTime) {
     const rotationAmount = ROTATION_SPEED * deltaTime;
-    
+
     // A key - rotate left (increase yaw)
     if (keysPressed.a) {
         yaw += degToRad(rotationAmount);
     }
-    
+
     // D key - rotate right (decrease yaw)
     if (keysPressed.d) {
         yaw -= degToRad(rotationAmount);
     }
-    
+
     // W key - rotate up (increase pitch)
     if (keysPressed.w) {
         pitch += rotationAmount;
     }
-    
+
     // S key - rotate down (decrease pitch)
     if (keysPressed.s) {
         pitch -= rotationAmount;
     }
-    
+
     // Clamp yaw and pitch to valid ranges
     yaw = clamp(yaw, MIN_YAW, MAX_YAW);
     pitch = clamp(pitch, MIN_PITCH, MAX_PITCH);
+}
+
+/**
+ * Updates ship position based on arrow key input
+ * @param {number} deltaTime - Time since last frame in seconds
+ * @param {THREE.Group} cannonGroup - The cannon/ship group to move
+ */
+export function updateShipMovement(deltaTime, cannonGroup) {
+    const movementAmount = MOVEMENT_SPEED * deltaTime;
+
+    // Arrow Left - move ship left
+    if (keysPressed.arrowleft) {
+        cannonGroup.position.x -= movementAmount;
+    }
+
+    // Arrow Right - move ship right
+    if (keysPressed.arrowright) {
+        cannonGroup.position.x += movementAmount;
+    }
+
+    // Clamp ship position to boundaries
+    cannonGroup.position.x = clamp(cannonGroup.position.x, MIN_X_POSITION, MAX_X_POSITION);
 }
 
 /**

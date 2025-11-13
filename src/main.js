@@ -4,11 +4,11 @@
  */
 
 import { createScene, handleResize, scene, camera, renderer, controls, updateWater, updateShipWakes } from './scene.js';
-import { createCannon, setYawPitch, getMuzzlePosition, getFiringDirection } from './cannon.js';
+import { createCannon, setYawPitch, getMuzzlePosition, getFiringDirection, cannonGroup } from './cannon.js';
 import { spawnProjectile, updateProjectiles, getProjectiles, clearAllProjectiles, killProjectile, despawnProjectile } from './projectile.js';
 import { spawnTargets, updateTargets, getTargets, clearAllTargets, resetTarget, hitTarget } from './targets.js';
 import { sphereVsAABB, getAABBFromMesh } from './collision.js';
-import { initInput, updateAiming, updateCharging, checkFire, getAimAngles, getCurrentCharge, addRestartListener as addInputRestartListener } from './input.js';
+import { initInput, updateAiming, updateCharging, checkFire, getAimAngles, getCurrentCharge, updateShipMovement, addRestartListener as addInputRestartListener } from './input.js';
 import { initHUD, updateScore, updateTimer, updatePowerBar, showGameOver, hideGameOver, addRestartListener, resetHUD } from './hud.js';
 
 // Game state
@@ -116,6 +116,9 @@ function animate() {
  * Updates game logic each frame
  */
 function updateGame(currentTime, deltaTime) {
+    // Update ship movement with arrow keys
+    updateShipMovement(deltaTime, cannonGroup);
+
     // Update cannon aiming with keyboard
     updateAiming(deltaTime);
     const { yaw, pitch } = getAimAngles();
@@ -139,7 +142,7 @@ function updateGame(currentTime, deltaTime) {
 
     // Update water animation and ship wakes
     updateWater(deltaTime);
-    updateShipWakes(getTargets());
+    updateShipWakes(getTargets(), cannonGroup, deltaTime);
 
     // Check collisions
     checkCollisions();

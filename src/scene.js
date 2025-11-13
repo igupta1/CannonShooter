@@ -8,6 +8,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 let scene, camera, renderer, controls;
 let waterMaterial, waterUniforms;
+let previousShipPositions = new Map(); // Track previous positions for velocity calculation
 
 /**
  * Creates and initializes the Three.js scene
@@ -99,6 +100,12 @@ function addGround() {
         initialPositions.push(new THREE.Vector3(0, 0, 0));
     }
 
+    // Initialize ship velocities array
+    const initialVelocities = [];
+    for (let i = 0; i < 32; i++) {
+        initialVelocities.push(new THREE.Vector3(0, 0, 0));
+    }
+
     // Shader uniforms for wave animation and ship wake effects
     waterUniforms = {
         time: { value: 0.0 },
@@ -108,6 +115,7 @@ function addGround() {
         oceanColor: { value: new THREE.Color(0x1e90ff) },
         deepColor: { value: new THREE.Color(0x0a4d8f) },
         shipPositions: { value: initialPositions },
+        shipVelocities: { value: initialVelocities },
         shipCount: { value: 0 }
     };
 
@@ -120,6 +128,7 @@ function addGround() {
             uniform float waveHeight;
             uniform float waveFrequency;
             uniform vec3 shipPositions[32]; // Max 32 ships
+            uniform vec3 shipVelocities[32]; // Ship velocities
             uniform int shipCount;
 
             varying vec3 vWorldPosition;
@@ -137,17 +146,43 @@ function addGround() {
 
                 float waveDisplacement = wave1 + wave2 + wave3;
 
-                // Add wake effect from ships
+                // Add directional wake effect from ships
                 for(int i = 0; i < 32; i++) {
                     if(i >= shipCount) break;
 
                     vec3 shipPos = shipPositions[i];
-                    float dist = distance(vec2(vWorldPosition.x, vWorldPosition.z), vec2(shipPos.x, shipPos.z));
+                    vec3 shipVel = shipVelocities[i];
 
-                    // Create ripples radiating from ship
-                    if(dist < 15.0) {
-                        float ripple = sin(dist * 2.0 - time * 3.0) * exp(-dist * 0.15);
-                        waveDisplacement += ripple * 0.4;
+                    vec2 toWater = vec2(vWorldPosition.x - shipPos.x, vWorldPosition.z - shipPos.z);
+                    float dist = length(toWater);
+
+                    // Only create wake behind the ship
+                    if(dist > 0.1 && dist < 10.0) {
+                        vec2 velDir = normalize(vec2(shipVel.x, shipVel.z));
+                        float speed = length(vec2(shipVel.x, shipVel.z));
+
+                        if(speed > 0.01) {
+                            // Check if water point is behind the ship
+                            vec2 toWaterNorm = normalize(toWater);
+                            float behindShip = dot(toWaterNorm, -velDir);
+
+                            if(behindShip > 0.2) {
+                                // V-shaped wake pattern
+                                float lateralDist = abs(dot(toWater, vec2(-velDir.y, velDir.x)));
+                                float wakeAngle = lateralDist / dist;
+
+                                if(wakeAngle < 0.6) {
+                                    // Smoother fade out
+                                    float distanceFade = exp(-dist * 0.18);
+                                    float angleFade = smoothstep(0.6, 0.0, wakeAngle);
+                                    float wakeFade = distanceFade * angleFade;
+
+                                    // Bigger, more visible waves
+                                    float wakeWave = sin(dist * 3.0 - time * 5.0) * wakeFade;
+                                    waveDisplacement += wakeWave * 0.22 * min(speed, 5.0);
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -216,30 +251,71 @@ export function updateWater(deltaTime) {
 /**
  * Updates ship positions for water wake effect
  * @param {Array} targets - Array of ship targets
+ * @param {THREE.Group} playerShip - Player's cannon/ship group
+ * @param {number} deltaTime - Time since last frame
  */
-export function updateShipWakes(targets) {
-    if (!waterUniforms) return;
+export function updateShipWakes(targets, playerShip, deltaTime) {
+    if (!waterUniforms || deltaTime === 0) return;
 
     const positions = [];
-    for (const target of targets) {
+    const velocities = [];
+    let shipIndex = 0;
+
+    // Add player ship position and velocity
+    if (playerShip) {
+        const currentPos = new THREE.Vector3(
+            playerShip.position.x,
+            playerShip.position.y,
+            playerShip.position.z
+        );
+        positions.push(currentPos);
+
+        // Calculate velocity
+        const prevPos = previousShipPositions.get('player');
+        if (prevPos) {
+            const velocity = new THREE.Vector3().subVectors(currentPos, prevPos).divideScalar(deltaTime);
+            velocities.push(velocity);
+        } else {
+            velocities.push(new THREE.Vector3(0, 0, 0));
+        }
+        previousShipPositions.set('player', currentPos.clone());
+        shipIndex++;
+    }
+
+    // Add enemy ship positions and velocities
+    for (let i = 0; i < targets.length; i++) {
+        const target = targets[i];
         if (target.isMoving && target.mesh && !target.destroyed) {
-            // Create a new Vector3 for each ship position
-            positions.push(new THREE.Vector3(
+            const currentPos = new THREE.Vector3(
                 target.mesh.position.x,
                 target.mesh.position.y,
                 target.mesh.position.z
-            ));
+            );
+            positions.push(currentPos);
+
+            // Calculate velocity
+            const prevPos = previousShipPositions.get(`enemy_${i}`);
+            if (prevPos) {
+                const velocity = new THREE.Vector3().subVectors(currentPos, prevPos).divideScalar(deltaTime);
+                velocities.push(velocity);
+            } else {
+                velocities.push(new THREE.Vector3(0, 0, 0));
+            }
+            previousShipPositions.set(`enemy_${i}`, currentPos.clone());
+            shipIndex++;
         }
     }
 
-    // Pad array to 32 elements (shader array size)
+    // Pad arrays to 32 elements (shader array size)
     while (positions.length < 32) {
         positions.push(new THREE.Vector3(0, 0, 0));
+        velocities.push(new THREE.Vector3(0, 0, 0));
     }
 
     // Update uniforms
     waterUniforms.shipPositions.value = positions;
-    waterUniforms.shipCount.value = Math.min(targets.filter(t => t.isMoving).length, 32);
+    waterUniforms.shipVelocities.value = velocities;
+    waterUniforms.shipCount.value = shipIndex;
 }
 
 /**
