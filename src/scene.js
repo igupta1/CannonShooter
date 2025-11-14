@@ -20,15 +20,16 @@ export function createScene(container) {
     scene.background = new THREE.Color(0x87CEEB); // Sky blue
     scene.fog = new THREE.Fog(0x87CEEB, 30, 120);
     
-    // Create camera - positioned behind cannon looking toward blocks
+    // Create camera - third person view behind ship
     camera = new THREE.PerspectiveCamera(
         75,
         window.innerWidth / window.innerHeight,
         0.1,
         1000
     );
+    // Initial position (will be updated to follow ship)
     camera.position.set(0, 8, 12);
-    camera.lookAt(0, 2, -10);
+    camera.lookAt(0, 2, 0);
     
     // Create renderer with shadows
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -38,15 +39,14 @@ export function createScene(container) {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
     
-    // Create orbit controls - target the area between cannon and blocks
+    // Setup orbit controls (disabled by default for third-person, enabled in free camera mode)
     controls = new OrbitControls(camera, renderer.domElement);
+    controls.enabled = false; // Disable by default for third-person follow cam
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.minDistance = 5;
-    controls.maxDistance = 50;
+    controls.minDistance = 3;
+    controls.maxDistance = 80;
     controls.maxPolarAngle = Math.PI / 2 - 0.1; // Prevent going below ground
-    controls.target.set(0, 2, -10); // Look toward block area
-    controls.update();
     
     // Add lights
     addLights();
@@ -246,6 +246,53 @@ export function updateWater(deltaTime) {
     if (waterUniforms) {
         waterUniforms.time.value += deltaTime;
     }
+}
+
+/**
+ * Updates camera to follow the player ship in third-person view
+ * @param {THREE.Group} playerShip - The player's ship/cannon group
+ * @param {boolean} freeCameraMode - Whether free camera mode is active
+ */
+export function updateCamera(playerShip, freeCameraMode = false) {
+    if (!playerShip || !camera) return;
+
+    // In free camera mode, enable OrbitControls
+    if (freeCameraMode) {
+        controls.enabled = true;
+        // Always update target to player ship for orbiting (ship may still move from physics)
+        controls.target.set(playerShip.position.x, playerShip.position.y + 2, playerShip.position.z);
+        // Update controls (required for damping)
+        controls.update();
+        return;
+    }
+
+    // In third-person mode, disable OrbitControls and follow ship
+    if (controls.enabled) {
+        controls.enabled = false;
+    }
+
+    // Camera offset behind and above the ship (in local space)
+    const cameraDistance = 12; // Distance behind ship
+    const cameraHeight = 8;     // Height above ship
+
+    // Get ship's rotation
+    const shipRotation = playerShip.rotation.y;
+
+    // Calculate camera position behind the ship
+    const offsetX = Math.sin(shipRotation) * cameraDistance;
+    const offsetZ = Math.cos(shipRotation) * cameraDistance;
+
+    // Set camera position
+    camera.position.x = playerShip.position.x + offsetX;
+    camera.position.y = playerShip.position.y + cameraHeight;
+    camera.position.z = playerShip.position.z + offsetZ;
+
+    // Camera looks at a point in front of the ship
+    const lookAheadDistance = 10;
+    const lookAtX = playerShip.position.x - Math.sin(shipRotation) * lookAheadDistance;
+    const lookAtZ = playerShip.position.z - Math.cos(shipRotation) * lookAheadDistance;
+
+    camera.lookAt(lookAtX, playerShip.position.y + 2, lookAtZ);
 }
 
 /**

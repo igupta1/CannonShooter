@@ -15,34 +15,45 @@ const GRID_SPACING = 10; // Distance between ship centers (must be > 2 * SHIP_RA
 const MOVEMENT_RADIUS = 1.5; // How far ships move from their center position
 
 /**
- * Spawns multiple targets in organized rows
+ * Spawns guard ships in circles around treasures
  * @param {THREE.Scene} scene - Scene to add targets to
- * @param {number} count - Number of targets to spawn
+ * @param {Array} treasurePositions - Array of treasure positions {x, z}
+ * @param {number} shipsPerTreasure - Number of ships guarding each treasure
  */
-export function spawnTargets(scene, count) {
-    // Calculate grid dimensions - 6 ships per row
-    const shipsPerRow = 6;
-    const numRows = Math.ceil(count / shipsPerRow);
-    let shipIndex = 0;
+export function spawnTargets(scene, treasurePositions, shipsPerTreasure = 5) {
+    // Clear existing targets
+    for (const target of targets) {
+        scene.remove(target.mesh);
+    }
+    targets.length = 0;
 
-    for (let row = 0; row < numRows && shipIndex < count; row++) {
-        const shipsInThisRow = Math.min(shipsPerRow, count - shipIndex);
-        for (let col = 0; col < shipsInThisRow && shipIndex < count; col++) {
-            spawnTarget(scene, row, col, shipsPerRow, numRows);
-            shipIndex++;
+    // Spawn ships in circles around each treasure
+    for (let i = 0; i < treasurePositions.length; i++) {
+        const treasure = treasurePositions[i];
+        const orbitRadius = 8; // Radius of the circle around treasure
+
+        for (let j = 0; j < shipsPerTreasure; j++) {
+            // Calculate position in circle
+            const angle = (j / shipsPerTreasure) * Math.PI * 2;
+            const x = treasure.x + Math.cos(angle) * orbitRadius;
+            const z = treasure.z + Math.sin(angle) * orbitRadius;
+
+            spawnTarget(scene, treasure.x, treasure.z, orbitRadius, angle, i, j);
         }
     }
 }
 
 /**
- * Spawns a single navy ship target
+ * Spawns a single navy ship target that orbits around a treasure
  * @param {THREE.Scene} scene - Scene to add target to
- * @param {number} row - Row index
- * @param {number} col - Column index within the row
- * @param {number} shipsPerRow - Total ships per row
- * @param {number} numRows - Total number of rows
+ * @param {number} treasureX - X position of treasure being guarded
+ * @param {number} treasureZ - Z position of treasure being guarded
+ * @param {number} orbitRadius - Radius of orbit around treasure
+ * @param {number} startAngle - Starting angle in the orbit
+ * @param {number} treasureIndex - Index of treasure being guarded
+ * @param {number} shipIndex - Index of this ship in the guard circle
  */
-function spawnTarget(scene, row, col, shipsPerRow, numRows) {
+function spawnTarget(scene, treasureX, treasureZ, orbitRadius, startAngle, treasureIndex, shipIndex) {
     // Create a group for the navy ship
     const shipGroup = new THREE.Group();
     
@@ -138,48 +149,68 @@ function spawnTarget(scene, row, col, shipsPerRow, numRows) {
     bowMesh.castShadow = true;
     shipGroup.add(bowMesh);
 
-    // Calculate center position in grid
-    // Center the entire grid around x=0, z=-35 (farther from player)
-    const gridWidthHalf = ((shipsPerRow - 1) * GRID_SPACING) / 2;
-    const gridDepthHalf = ((numRows - 1) * GRID_SPACING) / 2;
+    // Add cannons to enemy ship (2 cannons on sides)
+    const cannonGeometry = new THREE.CylinderGeometry(0.1, 0.12, 0.8, 8);
+    const cannonMaterial = new THREE.MeshStandardMaterial({
+        color: 0x333333,
+        roughness: 0.6,
+        metalness: 0.8
+    });
 
-    const centerX = (col * GRID_SPACING) - gridWidthHalf;
-    const centerZ = -35 - (row * GRID_SPACING) + gridDepthHalf;
+    // Left cannon
+    const leftCannon = new THREE.Mesh(cannonGeometry, cannonMaterial);
+    leftCannon.rotation.z = Math.PI / 2;
+    leftCannon.position.set(-0.7, 0.6, 0);
+    leftCannon.castShadow = true;
+    shipGroup.add(leftCannon);
 
-    shipGroup.position.set(centerX, TARGET_HEIGHT, centerZ);
+    // Right cannon
+    const rightCannon = new THREE.Mesh(cannonGeometry, cannonMaterial);
+    rightCannon.rotation.z = Math.PI / 2;
+    rightCannon.position.set(0.7, 0.6, 0);
+    rightCannon.castShadow = true;
+    shipGroup.add(rightCannon);
+
+    // Calculate initial position on orbit
+    const startX = treasureX + Math.cos(startAngle) * orbitRadius;
+    const startZ = treasureZ + Math.sin(startAngle) * orbitRadius;
+
+    shipGroup.position.set(startX, TARGET_HEIGHT, startZ);
     
     scene.add(shipGroup);
     
-    // Store target data
+    // Store target data for orbiting behavior
     const target = {
         mesh: shipGroup,
         isMoving: true, // All ships move
-        centerX: centerX, // Center position of this ship
-        centerZ: centerZ, // Center Z position
-        row: row,
-        col: col,
-        movementRadius: MOVEMENT_RADIUS,
-        // Random speeds for X and Z movement (independent)
-        speedX: randomInRange(0.5, 1.2),
-        speedZ: randomInRange(0.5, 1.2),
-        // Random phase offsets so ships don't move in sync
-        phaseX: Math.random() * Math.PI * 2,
-        phaseZ: Math.random() * Math.PI * 2,
-        movementTime: 0,
+        // Orbit parameters
+        treasureX: treasureX, // X position of treasure being guarded
+        treasureZ: treasureZ, // Z position of treasure being guarded
+        orbitRadius: orbitRadius, // Radius of circular orbit
+        orbitAngle: startAngle, // Current angle in orbit
+        orbitSpeed: 0.3, // Speed of orbit (radians per second)
+        treasureIndex: treasureIndex,
+        shipIndex: shipIndex,
         originalColor: hullMaterial.color.clone(),
         hullMaterial: hullMaterial, // Store for color animation
         hitTime: 0,
-        hits: 0
+        hits: 0,
+        // Shooting parameters
+        detectionRadius: 15, // Distance at which ship detects player
+        shootCooldown: 0, // Time until next shot
+        shootInterval: 4.0 // Seconds between shots (increased for health system)
     };
     
     targets.push(target);
 }
 
 /**
- * Updates all targets (movement, hit animations)
+ * Updates all targets (movement, hit animations, shooting)
  * @param {number} deltaTime - Time since last frame in seconds
+ * @param {THREE.Vector3} playerPosition - Player ship position
+ * @param {Function} shootCallback - Callback function to spawn enemy projectile
  */
-export function updateTargets(deltaTime) {
+export function updateTargets(deltaTime, playerPosition = null, shootCallback = null) {
     const currentTime = performance.now() / 1000;
 
     for (const target of targets) {
@@ -187,17 +218,55 @@ export function updateTargets(deltaTime) {
         if (target.destroyed) continue;
 
         if (target.isMoving) {
-            // Update movement time
-            target.movementTime += deltaTime;
+            // Update orbit angle
+            target.orbitAngle += target.orbitSpeed * deltaTime;
 
-            // Calculate X and Z offsets using sine waves with independent speeds and phases
-            const offsetX = Math.sin(target.movementTime * target.speedX + target.phaseX) * target.movementRadius;
-            const offsetZ = Math.sin(target.movementTime * target.speedZ + target.phaseZ) * target.movementRadius;
+            // Calculate new position on circular orbit
+            const x = target.treasureX + Math.cos(target.orbitAngle) * target.orbitRadius;
+            const z = target.treasureZ + Math.sin(target.orbitAngle) * target.orbitRadius;
 
-            // Update position: oscillate around center position
-            target.mesh.position.x = target.centerX + offsetX;
-            target.mesh.position.z = target.centerZ + offsetZ;
+            target.mesh.position.x = x;
+            target.mesh.position.z = z;
             target.mesh.position.y = TARGET_HEIGHT;
+
+            // Rotate ship to face direction of movement (tangent to circle)
+            target.mesh.rotation.y = target.orbitAngle + Math.PI / 2;
+        }
+
+        // Enemy shooting AI
+        if (playerPosition && shootCallback && target.isMoving) {
+            // Update shoot cooldown
+            if (target.shootCooldown > 0) {
+                target.shootCooldown -= deltaTime;
+            }
+
+            // Check if player is in range
+            const dx = playerPosition.x - target.mesh.position.x;
+            const dz = playerPosition.z - target.mesh.position.z;
+            const distanceToPlayer = Math.sqrt(dx * dx + dz * dz);
+
+            // If player is in range and cooldown is ready, shoot
+            if (distanceToPlayer < target.detectionRadius && target.shootCooldown <= 0) {
+                // Calculate direction to player
+                const direction = new THREE.Vector3(dx, 0, dz).normalize();
+
+                // Aim slightly up for arc trajectory
+                direction.y = 0.2;
+                direction.normalize();
+
+                // Get cannon position (center of ship, slightly elevated)
+                const cannonPos = new THREE.Vector3(
+                    target.mesh.position.x,
+                    target.mesh.position.y + 0.6,
+                    target.mesh.position.z
+                );
+
+                // Shoot!
+                shootCallback(cannonPos, direction);
+
+                // Reset cooldown
+                target.shootCooldown = target.shootInterval;
+            }
         }
         
         // Handle hit animation (flash and scale)
@@ -223,25 +292,24 @@ export function updateTargets(deltaTime) {
 }
 
 /**
- * Resets a navy ship target to a new random position
+ * Resets a navy ship target to its original orbit position
  * @param {Object} target - Target to reset
  */
 export function resetTarget(target) {
-    // Reset to center position
-    target.mesh.position.set(target.centerX, TARGET_HEIGHT, target.centerZ);
+    // Reset orbit angle to a random position
+    target.orbitAngle = Math.random() * Math.PI * 2;
+
+    // Calculate position on orbit
+    const x = target.treasureX + Math.cos(target.orbitAngle) * target.orbitRadius;
+    const z = target.treasureZ + Math.sin(target.orbitAngle) * target.orbitRadius;
+
+    target.mesh.position.set(x, TARGET_HEIGHT, z);
 
     // Keep navy ship color consistent (don't randomize)
     target.hullMaterial.color.copy(target.originalColor);
 
-    // Reset movement parameters with new random values
-    target.speedX = randomInRange(0.5, 1.2);
-    target.speedZ = randomInRange(0.5, 1.2);
-    target.phaseX = Math.random() * Math.PI * 2;
-    target.phaseZ = Math.random() * Math.PI * 2;
-    target.movementTime = 0;
-
     target.mesh.scale.set(1, 1, 1);
-    target.mesh.rotation.y = 0;
+    target.mesh.rotation.y = target.orbitAngle + Math.PI / 2;
 }
 
 /**

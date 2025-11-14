@@ -10,6 +10,9 @@ let powerBarElement;
 let gameOverElement;
 let finalScoreElement;
 let restartButton;
+let treasureElement;
+let healthElement;
+let cameraModeElement;
 
 /**
  * Initializes HUD element references
@@ -21,6 +24,9 @@ export function initHUD() {
     gameOverElement = document.getElementById('game-over');
     finalScoreElement = document.getElementById('final-score');
     restartButton = document.getElementById('restart-btn');
+    treasureElement = document.getElementById('treasures');
+    healthElement = document.getElementById('health');
+    cameraModeElement = document.getElementById('camera-mode');
 }
 
 /**
@@ -56,9 +62,16 @@ export function updatePowerBar(charge) {
 /**
  * Shows the game over screen
  * @param {number} finalScore - Final score to display
+ * @param {string} message - Optional custom message (defaults to "Time's Up!")
  */
-export function showGameOver(finalScore) {
+export function showGameOver(finalScore, message = "Time's Up!") {
     if (gameOverElement && finalScoreElement) {
+        // Update message if there's an h1 element
+        const titleElement = gameOverElement.querySelector('h1');
+        if (titleElement) {
+            titleElement.textContent = message;
+        }
+
         finalScoreElement.textContent = finalScore;
         gameOverElement.classList.remove('hidden');
     }
@@ -84,12 +97,49 @@ export function addRestartListener(callback) {
 }
 
 /**
+ * Updates the treasure count display
+ * @param {number} collected - Number of treasures collected
+ * @param {number} total - Total number of treasures
+ */
+export function updateTreasureCount(collected, total) {
+    if (treasureElement) {
+        treasureElement.textContent = `${collected}/${total}`;
+    }
+}
+
+/**
+ * Updates the health display
+ * @param {number} current - Current health
+ * @param {number} max - Maximum health
+ */
+export function updateHealth(current, max) {
+    if (healthElement) {
+        // Display hearts (♥) based on health
+        const hearts = '♥'.repeat(current) + '♡'.repeat(max - current);
+        healthElement.textContent = hearts;
+    }
+}
+
+/**
+ * Updates the camera mode display
+ * @param {boolean} isFreeCameraMode - Whether free camera is active
+ */
+export function updateCameraMode(isFreeCameraMode) {
+    if (cameraModeElement) {
+        cameraModeElement.style.display = isFreeCameraMode ? 'block' : 'none';
+    }
+}
+
+/**
  * Resets HUD to initial state
  */
 export function resetHUD() {
     updateScore(0);
     updateTimer(60);
     updatePowerBar(0);
+    updateTreasureCount(0, 0);
+    updateHealth(4, 4);
+    updateCameraMode(false);
     hideGameOver();
 }
 

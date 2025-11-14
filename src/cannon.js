@@ -150,15 +150,16 @@ export function createCannon(scene) {
 
 /**
  * Sets the yaw and pitch of the cannon
- * @param {number} yaw - Rotation around Y axis in radians
+ * @param {number} yaw - Rotation around Y axis in radians (relative to ship)
  * @param {number} pitch - Rotation around X axis in degrees
  */
 export function setYawPitch(yaw, pitch) {
     // Clamp pitch to valid range
     const clampedPitch = clamp(pitch, MIN_PITCH, MAX_PITCH);
-    
+
     // Apply rotations
-    // Yaw rotates the base left/right
+    // Yaw rotates the cannon base left/right RELATIVE to the ship
+    // The ship itself is rotated via cannonGroup.rotation.y in input.js
     cannonBase.rotation.y = yaw;
     // Pitch rotates the barrel up/down (positive pitch = aim up)
     cannonBarrel.rotation.x = degToRad(clampedPitch);

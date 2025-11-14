@@ -19,32 +19,36 @@ const PROJECTILE_RADIUS = 0.3;
  * @param {THREE.Vector3} origin - Starting position
  * @param {THREE.Vector3} direction - Normalized direction vector
  * @param {number} speed - Initial speed
+ * @param {string} type - 'player' or 'enemy'
  */
-export function spawnProjectile(scene, origin, direction, speed) {
+export function spawnProjectile(scene, origin, direction, speed, type = 'player') {
     // Create sphere geometry
     const geometry = new THREE.SphereGeometry(PROJECTILE_RADIUS, 16, 16);
     const material = new THREE.MeshStandardMaterial({
-        color: 0x333333,
+        color: type === 'enemy' ? 0xFF4444 : 0x333333, // Red for enemy, dark for player
         roughness: 0.7,
-        metalness: 0.8
+        metalness: 0.8,
+        emissive: type === 'enemy' ? 0xFF0000 : 0x000000, // Enemy projectiles glow red
+        emissiveIntensity: type === 'enemy' ? 0.3 : 0
     });
-    
+
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.copy(origin);
     mesh.castShadow = true;
-    
+
     scene.add(mesh);
-    
+
     // Calculate initial velocity
     const velocity = direction.clone().multiplyScalar(speed);
-    
+
     // Store projectile data
     projectiles.push({
         mesh,
         velocity,
         birthTime: performance.now() / 1000,
         alive: true,
-        radius: PROJECTILE_RADIUS
+        radius: PROJECTILE_RADIUS,
+        type: type // 'player' or 'enemy'
     });
 }
 
