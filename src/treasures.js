@@ -15,17 +15,20 @@ const CHEST_HEIGHT = 0.5; // Height above water surface
 function createChestModel() {
     const chestGroup = new THREE.Group();
 
-    // Chest colors
-    const woodBrown = 0x8B4513;
+    // Chest colors - brighter and more vibrant
+    const woodBrown = 0xA0522D;
     const goldColor = 0xFFD700;
-    const darkWood = 0x654321;
+    const brightGold = 0xFFE55C;
+    const darkWood = 0x8B4513;
 
-    // Main chest body (bottom part)
+    // Main chest body (bottom part) - brighter wood
     const bodyGeometry = new THREE.BoxGeometry(1.2, 0.8, 0.8);
     const bodyMaterial = new THREE.MeshStandardMaterial({
         color: woodBrown,
-        roughness: 0.8,
-        metalness: 0.2
+        roughness: 0.6,
+        metalness: 0.3,
+        emissive: 0x4A2511,
+        emissiveIntensity: 0.2
     });
     const bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
     bodyMesh.position.y = 0.4;
@@ -37,27 +40,31 @@ function createChestModel() {
     const lidGeometry = new THREE.BoxGeometry(1.2, 0.4, 0.8);
     const lidMaterial = new THREE.MeshStandardMaterial({
         color: darkWood,
-        roughness: 0.7,
-        metalness: 0.2
+        roughness: 0.6,
+        metalness: 0.3,
+        emissive: 0x3D2310,
+        emissiveIntensity: 0.2
     });
     const lidMesh = new THREE.Mesh(lidGeometry, lidMaterial);
     lidMesh.position.y = 1.0;
     lidMesh.castShadow = true;
     chestGroup.add(lidMesh);
 
-    // Gold trim/lock on front
+    // Gold trim/lock on front - glowing gold
     const lockGeometry = new THREE.BoxGeometry(0.3, 0.3, 0.15);
     const lockMaterial = new THREE.MeshStandardMaterial({
-        color: goldColor,
-        roughness: 0.3,
-        metalness: 0.9
+        color: brightGold,
+        roughness: 0.2,
+        metalness: 1.0,
+        emissive: goldColor,
+        emissiveIntensity: 0.6
     });
     const lockMesh = new THREE.Mesh(lockGeometry, lockMaterial);
     lockMesh.position.set(0, 0.4, 0.5);
     lockMesh.castShadow = true;
     chestGroup.add(lockMesh);
 
-    // Gold bands (horizontal)
+    // Gold bands (horizontal) - glowing
     const bandGeometry = new THREE.BoxGeometry(1.3, 0.1, 0.85);
     const band1 = new THREE.Mesh(bandGeometry, lockMaterial);
     band1.position.y = 0.3;
@@ -68,6 +75,11 @@ function createChestModel() {
     band2.position.y = 0.7;
     band2.castShadow = true;
     chestGroup.add(band2);
+
+    // Add a point light for glow effect
+    const glowLight = new THREE.PointLight(goldColor, 1.5, 8);
+    glowLight.position.set(0, 0.6, 0);
+    chestGroup.add(glowLight);
 
     return chestGroup;
 }

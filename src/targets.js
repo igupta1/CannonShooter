@@ -198,7 +198,7 @@ function spawnTarget(scene, treasureX, treasureZ, orbitRadius, startAngle, treas
         // Shooting parameters
         detectionRadius: 15, // Distance at which ship detects player
         shootCooldown: 0, // Time until next shot
-        shootInterval: 4.0 // Seconds between shots (increased for health system)
+        shootInterval: 7.0 // Seconds between shots (slower fire rate)
     };
     
     targets.push(target);

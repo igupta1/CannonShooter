@@ -3,9 +3,10 @@
  * Bootstraps the game and runs the main update loop
  */
 
+import * as THREE from 'three';
 import { createScene, handleResize, scene, camera, renderer, controls, updateWater, updateShipWakes, updateCamera } from './scene.js';
 import { createCannon, setYawPitch, getMuzzlePosition, getFiringDirection, cannonGroup } from './cannon.js';
-import { spawnProjectile, updateProjectiles, getProjectiles, clearAllProjectiles, killProjectile, despawnProjectile } from './projectile.js';
+import { spawnProjectile, updateProjectiles, getProjectiles, clearAllProjectiles, killProjectile, despawnProjectile, createExplosion } from './projectile.js';
 import { spawnTargets, updateTargets, getTargets, clearAllTargets, resetTarget, hitTarget } from './targets.js';
 import { spawnTreasures, updateTreasures, checkTreasureCollection, collectTreasure, clearAllTreasures, getCollectedCount, getTotalCount } from './treasures.js';
 import { sphereVsAABB, getAABBFromMesh } from './collision.js';
@@ -17,7 +18,7 @@ let gameActive = false;
 let score = 0;
 let startTime = 0;
 let lastFrameTime = 0;
-let gameOverReason = 'timeout'; // 'timeout', 'collision', or 'hit'
+let gameOverReason = 'timeout'; // 'timeout', 'collision', 'hit', or 'victory'
 let playerHealth = 4; // Player health (max 4)
 const MAX_HEALTH = 4;
 
@@ -26,7 +27,7 @@ const GAME_DURATION = 60; // seconds
 const MIN_POWER = 10;
 const MAX_POWER = 40;
 const TREASURE_COUNT = 6; // Number of treasure chests
-const SHIPS_PER_TREASURE = 5; // Guard ships per treasure
+const SHIPS_PER_TREASURE = 1; // Guard ships per treasure
 
 /**
  * Initializes the game
@@ -171,6 +172,13 @@ function updateGame(currentTime, deltaTime) {
         score += 10; // 10 points per treasure
         updateScore(score);
         updateTreasureCount(getCollectedCount(), getTotalCount());
+        
+        // Check if all treasures collected (victory condition!)
+        if (getCollectedCount() >= getTotalCount()) {
+            gameOverReason = 'victory';
+            endGame();
+            return;
+        }
     }
 
     // Update water animation and ship wakes
@@ -215,10 +223,13 @@ function checkCollisions() {
     const projectiles = getProjectiles();
     const targets = getTargets();
 
+    // Track which projectiles to remove (for projectile-vs-projectile collisions)
+    const projectilesToRemove = new Set();
+
     for (let i = projectiles.length - 1; i >= 0; i--) {
         const proj = projectiles[i];
 
-        if (!proj.alive) {
+        if (!proj.alive || projectilesToRemove.has(i)) {
             continue;
         }
 
@@ -256,6 +267,11 @@ function checkCollisions() {
 
             const hitRadius = 2.5; // Player ship hit radius
             if (distance < hitRadius) {
+                // Create explosion at player ship position
+                const explosionPos = cannonGroup.position.clone();
+                explosionPos.y += 1; // Slightly above ship
+                createExplosion(scene, explosionPos, 0xFF2200);
+                
                 // Player hit by enemy projectile - Reduce health!
                 playerHealth--;
                 updatePlayerHealth(playerHealth);
@@ -271,6 +287,63 @@ function checkCollisions() {
                 }
             }
         }
+    }
+
+    // Check for projectile-vs-projectile collisions (player vs enemy)
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+        const proj1 = projectiles[i];
+        
+        if (!proj1.alive || projectilesToRemove.has(i)) {
+            continue;
+        }
+
+        // Only check player projectiles against enemy projectiles
+        if (proj1.type === 'player') {
+            for (let j = projectiles.length - 1; j >= 0; j--) {
+                if (i === j) continue; // Don't check against self
+                
+                const proj2 = projectiles[j];
+                
+                if (!proj2.alive || projectilesToRemove.has(j)) {
+                    continue;
+                }
+
+                // Check if proj2 is an enemy projectile
+                if (proj2.type === 'enemy') {
+                    // Calculate distance between projectiles
+                    const dx = proj1.mesh.position.x - proj2.mesh.position.x;
+                    const dy = proj1.mesh.position.y - proj2.mesh.position.y;
+                    const dz = proj1.mesh.position.z - proj2.mesh.position.z;
+                    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+                    // Check if projectiles collide (sum of their radii)
+                    const collisionDistance = proj1.radius + proj2.radius + 0.3; // Small buffer
+                    if (distance < collisionDistance) {
+                        // Collision detected! Create explosion at midpoint
+                        const explosionPos = new THREE.Vector3(
+                            (proj1.mesh.position.x + proj2.mesh.position.x) / 2,
+                            (proj1.mesh.position.y + proj2.mesh.position.y) / 2,
+                            (proj1.mesh.position.z + proj2.mesh.position.z) / 2
+                        );
+                        
+                        // Create a yellow/orange explosion (mix of player and enemy colors)
+                        createExplosion(scene, explosionPos, 0xFFAA00);
+
+                        // Mark both projectiles for removal
+                        projectilesToRemove.add(i);
+                        projectilesToRemove.add(j);
+                        
+                        break; // Exit inner loop
+                    }
+                }
+            }
+        }
+    }
+
+    // Remove all collided projectiles
+    for (const index of Array.from(projectilesToRemove).sort((a, b) => b - a)) {
+        killProjectile(index);
+        despawnProjectile(index, scene);
     }
 }
 
@@ -289,6 +362,11 @@ function onTargetHit(target) {
     // Increment score
     score++;
     updateScore(score);
+
+    // Create explosion at ship position
+    const explosionPos = target.mesh.position.clone();
+    explosionPos.y += 1; // Slightly above ship center
+    createExplosion(scene, explosionPos, 0xFF4400);
 
     // Mark target as destroyed (stop moving and hide)
     target.isMoving = false;
@@ -348,7 +426,9 @@ function endGame() {
     gameActive = false;
 
     // Show different message based on how game ended
-    if (gameOverReason === 'collision') {
+    if (gameOverReason === 'victory') {
+        showGameOver(score, 'Congrats! You Won!');
+    } else if (gameOverReason === 'collision') {
         showGameOver(score, 'Ship Collision!');
     } else if (gameOverReason === 'hit') {
         showGameOver(score, 'Hit by Enemy Fire!');

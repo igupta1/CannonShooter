@@ -13,6 +13,7 @@ let currentCharge = 0;
 // Keyboard state
 let keysPressed = {
     w: false,
+    s: false,
     a: false,
     d: false,
     arrowup: false,
@@ -81,7 +82,7 @@ function onKeyDown(event) {
         return;
     }
 
-    if (key === 'w' || key === 'a' || key === 'd') {
+    if (key === 'w' || key === 's' || key === 'a' || key === 'd') {
         keysPressed[key] = true;
         event.preventDefault();
     }
@@ -96,7 +97,7 @@ function onKeyDown(event) {
  */
 function onKeyUp(event) {
     const key = event.key.toLowerCase();
-    if (key === 'w' || key === 'a' || key === 'd') {
+    if (key === 'w' || key === 's' || key === 'a' || key === 'd') {
         keysPressed[key] = false;
         event.preventDefault();
     }
@@ -131,7 +132,7 @@ export function updateAiming(deltaTime) {
 }
 
 /**
- * Updates ship position based on W/A/D input - forward movement and rotation only
+ * Updates ship position based on W/A/S/D input - forward/backward movement and rotation
  * @param {number} deltaTime - Time since last frame in seconds
  * @param {THREE.Group} cannonGroup - The cannon/ship group to move
  */
@@ -155,6 +156,14 @@ export function updateShipMovement(deltaTime, cannonGroup) {
     if (keysPressed.w) {
         const moveX = -Math.sin(shipRotation) * FORWARD_SPEED * deltaTime;
         const moveZ = -Math.cos(shipRotation) * FORWARD_SPEED * deltaTime;
+        cannonGroup.position.x += moveX;
+        cannonGroup.position.z += moveZ;
+    }
+
+    // S key - move backward (reverse) in the opposite direction the ship is facing
+    if (keysPressed.s) {
+        const moveX = Math.sin(shipRotation) * FORWARD_SPEED * deltaTime;
+        const moveZ = Math.cos(shipRotation) * FORWARD_SPEED * deltaTime;
         cannonGroup.position.x += moveX;
         cannonGroup.position.z += moveZ;
     }
