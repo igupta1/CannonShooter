@@ -106,20 +106,25 @@ function addGround() {
         initialVelocities.push(new THREE.Vector3(0, 0, 0));
     }
 
-    // Shader uniforms for wave animation and ship wake effects
+    // Enhanced shader uniforms for realistic ocean
     waterUniforms = {
         time: { value: 0.0 },
-        waveSpeed: { value: 0.5 },
-        waveHeight: { value: 0.3 },
-        waveFrequency: { value: 2.0 },
-        oceanColor: { value: new THREE.Color(0x1e90ff) },
-        deepColor: { value: new THREE.Color(0x0a4d8f) },
+        waveSpeed: { value: 0.4 },
+        waveHeight: { value: 0.25 },  // Reduced for smoother waves
+        waveFrequency: { value: 1.8 },
+        // Natural ocean color palette
+        shallowColor: { value: new THREE.Color(0x40A4C4) },    // Light tropical blue
+        deepColor: { value: new THREE.Color(0x0D4F6E) },       // Deep ocean blue
+        midColor: { value: new THREE.Color(0x1A6E8E) },        // Mid ocean blue
+        foamColor: { value: new THREE.Color(0xF0F8FF) },       // Slightly blue-tinted white foam
+        skyColor: { value: new THREE.Color(0x87CEEB) },        // Sky reflection
+        sunColor: { value: new THREE.Color(0xFFFAE0) },        // Warm sun color
         shipPositions: { value: initialPositions },
         shipVelocities: { value: initialVelocities },
         shipCount: { value: 0 }
     };
 
-    // Custom shader material for animated water
+    // Enhanced water shader with realistic ocean effects (optimized)
     waterMaterial = new THREE.ShaderMaterial({
         uniforms: waterUniforms,
         vertexShader: `
@@ -127,26 +132,45 @@ function addGround() {
             uniform float waveSpeed;
             uniform float waveHeight;
             uniform float waveFrequency;
-            uniform vec3 shipPositions[32]; // Max 32 ships
-            uniform vec3 shipVelocities[32]; // Ship velocities
+            uniform vec3 shipPositions[32];
+            uniform vec3 shipVelocities[32];
             uniform int shipCount;
 
             varying vec3 vWorldPosition;
             varying float vWaveHeight;
             varying vec3 vNormal;
+            varying float vFoam;
+            varying float vDistanceFromCamera;
 
             void main() {
                 vec3 pos = position;
                 vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
 
-                // Base wave pattern
-                float wave1 = sin(pos.x * waveFrequency + time * waveSpeed) * waveHeight;
-                float wave2 = sin(pos.y * waveFrequency * 0.7 + time * waveSpeed * 0.8) * waveHeight;
-                float wave3 = cos((pos.x + pos.y) * waveFrequency * 0.5 + time * waveSpeed * 1.2) * waveHeight * 0.5;
+                // Multi-frequency wave pattern for realistic ocean
+                float t = time * waveSpeed;
+                
+                // Large rolling swells
+                float wave1 = sin(pos.x * waveFrequency * 0.3 + t * 0.7) * waveHeight * 1.2;
+                float wave2 = sin(pos.y * waveFrequency * 0.25 + t * 0.5) * waveHeight * 1.0;
+                
+                // Medium waves
+                float wave3 = sin(pos.x * waveFrequency + t) * waveHeight * 0.6;
+                float wave4 = cos(pos.y * waveFrequency * 0.8 + t * 1.2) * waveHeight * 0.5;
+                
+                // Small choppy detail (using simple hash instead of noise)
+                float chop = sin(pos.x * 3.7 + pos.y * 2.3 + t * 2.0) * waveHeight * 0.15;
+                float chop2 = cos(pos.x * 2.1 - pos.y * 4.1 + t * 2.5) * waveHeight * 0.1;
+                
+                // Cross waves
+                float crossWave = sin((pos.x + pos.y) * waveFrequency * 0.6 + t * 0.9) * waveHeight * 0.4;
 
-                float waveDisplacement = wave1 + wave2 + wave3;
+                float waveDisplacement = wave1 + wave2 + wave3 + wave4 + chop + chop2 + crossWave;
+                
+                // Track foam from steep wave peaks
+                float waveSlope = abs(wave3 + wave4) / waveHeight;
+                vFoam = smoothstep(0.8, 1.3, waveSlope);
 
-                // Add directional wake effect from ships
+                // Ship wake effects
                 for(int i = 0; i < 32; i++) {
                     if(i >= shipCount) break;
 
@@ -156,31 +180,32 @@ function addGround() {
                     vec2 toWater = vec2(vWorldPosition.x - shipPos.x, vWorldPosition.z - shipPos.z);
                     float dist = length(toWater);
 
-                    // Only create wake behind the ship
-                    if(dist > 0.1 && dist < 10.0) {
-                        vec2 velDir = normalize(vec2(shipVel.x, shipVel.z));
+                    if(dist > 0.1 && dist < 12.0) {
+                        vec2 velDir = normalize(vec2(shipVel.x, shipVel.z) + vec2(0.001));
                         float speed = length(vec2(shipVel.x, shipVel.z));
 
                         if(speed > 0.01) {
-                            // Check if water point is behind the ship
                             vec2 toWaterNorm = normalize(toWater);
                             float behindShip = dot(toWaterNorm, -velDir);
 
-                            if(behindShip > 0.2) {
-                                // V-shaped wake pattern
+                            if(behindShip > 0.15) {
                                 float lateralDist = abs(dot(toWater, vec2(-velDir.y, velDir.x)));
                                 float wakeAngle = lateralDist / dist;
 
-                                if(wakeAngle < 0.6) {
-                                    // Smoother fade out
-                                    float distanceFade = exp(-dist * 0.18);
-                                    float angleFade = smoothstep(0.6, 0.0, wakeAngle);
+                                if(wakeAngle < 0.7) {
+                                    float distanceFade = exp(-dist * 0.15);
+                                    float angleFade = smoothstep(0.7, 0.0, wakeAngle);
                                     float wakeFade = distanceFade * angleFade;
 
-                                    // Bigger, more visible waves
-                                    float wakeWave = sin(dist * 3.0 - time * 5.0) * wakeFade;
-                                    waveDisplacement += wakeWave * 0.22 * min(speed, 5.0);
+                                    float wakeWave = sin(dist * 2.5 - time * 4.0) * wakeFade;
+                                    waveDisplacement += wakeWave * 0.25 * min(speed, 6.0);
+                                    
+                                    vFoam += wakeFade * 0.4 * min(speed, 3.0);
                                 }
+                            }
+                            
+                            if(dist < 3.0 && behindShip < 0.0) {
+                                vFoam += (1.0 - dist / 3.0) * speed * 0.25;
                             }
                         }
                     }
@@ -189,42 +214,98 @@ function addGround() {
                 pos.z += waveDisplacement;
                 vWaveHeight = waveDisplacement;
 
-                // Calculate normal for lighting
-                float delta = 0.1;
-                float dx = sin((pos.x + delta) * waveFrequency + time * waveSpeed) * waveHeight -
-                          sin((pos.x - delta) * waveFrequency + time * waveSpeed) * waveHeight;
-                float dy = sin((pos.y + delta) * waveFrequency * 0.7 + time * waveSpeed * 0.8) * waveHeight -
-                          sin((pos.y - delta) * waveFrequency * 0.7 + time * waveSpeed * 0.8) * waveHeight;
-
-                vNormal = normalize(vec3(-dx, -dy, 2.0 * delta));
+                // Calculate normal
+                float delta = 0.15;
+                float hL = sin((pos.x - delta) * waveFrequency + t) * waveHeight;
+                float hR = sin((pos.x + delta) * waveFrequency + t) * waveHeight;
+                float hD = sin((pos.y - delta) * waveFrequency * 0.8 + t * 1.2) * waveHeight;
+                float hU = sin((pos.y + delta) * waveFrequency * 0.8 + t * 1.2) * waveHeight;
+                
+                vNormal = normalize(vec3(hL - hR, hD - hU, delta * 2.0));
+                vDistanceFromCamera = length(cameraPosition - vWorldPosition);
 
                 gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
             }
         `,
         fragmentShader: `
-            uniform vec3 oceanColor;
+            uniform float time;
+            uniform vec3 shallowColor;
             uniform vec3 deepColor;
+            uniform vec3 midColor;
+            uniform vec3 foamColor;
+            uniform vec3 skyColor;
+            uniform vec3 sunColor;
 
             varying vec3 vWorldPosition;
             varying float vWaveHeight;
             varying vec3 vNormal;
+            varying float vFoam;
+            varying float vDistanceFromCamera;
 
             void main() {
-                // Mix colors based on wave height
-                vec3 color = mix(deepColor, oceanColor, vWaveHeight * 2.0 + 0.5);
-
-                // Simple directional lighting
-                vec3 lightDir = normalize(vec3(1.0, 1.0, 1.0));
-                float diffuse = max(dot(vNormal, lightDir), 0.3);
-
-                // Add specular highlights
+                vec3 normal = normalize(vNormal);
                 vec3 viewDir = normalize(cameraPosition - vWorldPosition);
-                vec3 reflectDir = reflect(-lightDir, vNormal);
-                float specular = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
+                vec3 sunDir = normalize(vec3(0.5, 0.7, 0.3));
+                
+                // === FRESNEL - more reflective at grazing angles ===
+                float fresnel = pow(1.0 - max(dot(viewDir, vec3(0.0, 1.0, 0.0)), 0.0), 2.5);
+                fresnel = mix(0.1, 0.7, fresnel);
+                
+                // === BASE WATER COLOR - brighter, more natural ===
+                float heightFactor = (vWaveHeight + 0.3) * 1.2;
+                heightFactor = clamp(heightFactor, 0.0, 1.0);
+                
+                // Smooth gradient from deep to shallow
+                vec3 waterColor = mix(deepColor, midColor, heightFactor * 0.7);
+                waterColor = mix(waterColor, shallowColor, heightFactor * heightFactor * 0.5);
+                
+                // Brighten overall
+                waterColor *= 1.15;
+                
+                // === SUBSURFACE SCATTERING - light through waves ===
+                float sss = pow(max(dot(viewDir, -sunDir), 0.0), 3.0);
+                vec3 subsurface = shallowColor * sss * 0.3;
+                waterColor += subsurface;
+                
+                // === DIFFUSE LIGHTING ===
+                float diffuse = max(dot(normal, sunDir), 0.0);
+                diffuse = diffuse * 0.4 + 0.6; // Keep shadows soft
+                waterColor *= diffuse;
+                
+                // === SPECULAR HIGHLIGHTS ===
+                vec3 halfDir = normalize(sunDir + viewDir);
+                float spec1 = pow(max(dot(normal, halfDir), 0.0), 128.0);
+                float spec2 = pow(max(dot(normal, halfDir), 0.0), 16.0);
+                vec3 specularColor = sunColor * (spec1 * 1.2 + spec2 * 0.2);
+                
+                // === SKY REFLECTION ===
+                vec3 reflectDir = reflect(-viewDir, normal);
+                float skyBlend = max(reflectDir.y * 0.5 + 0.5, 0.0);
+                vec3 skyReflect = mix(skyColor * 0.5, skyColor * 0.9, skyBlend);
+                
+                // === FOAM on wave crests ===
+                float foam = smoothstep(0.3, 0.9, vFoam);
+                float foamPattern = fract(sin(dot(vWorldPosition.xz * 3.0, vec2(12.9898, 78.233))) * 43758.5453);
+                foam *= 0.6 + foamPattern * 0.4;
+                
+                // === COMBINE ===
+                vec3 finalColor = waterColor;
+                
+                // Blend in sky reflection
+                finalColor = mix(finalColor, skyReflect, fresnel * 0.5);
+                
+                // Add sun sparkle
+                finalColor += specularColor;
+                
+                // Add white foam
+                finalColor = mix(finalColor, foamColor, foam * 0.8);
+                
+                // === HORIZON FOG ===
+                float fogFactor = smoothstep(50.0, 150.0, vDistanceFromCamera);
+                vec3 horizonColor = mix(skyColor, vec3(0.7, 0.85, 0.95), 0.3);
+                finalColor = mix(finalColor, horizonColor, fogFactor * 0.6);
 
-                color = color * diffuse + vec3(1.0) * specular * 0.3;
-
-                gl_FragColor = vec4(color, 1.0);
+                gl_FragColor = vec4(finalColor, 1.0);
             }
         `,
         side: THREE.DoubleSide

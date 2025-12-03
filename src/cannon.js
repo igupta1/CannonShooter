@@ -53,7 +53,7 @@ export function createCannon(scene) {
     });
     const hullMesh = new THREE.Mesh(hullGeometry, hullMaterial);
     hullMesh.rotation.x = Math.PI / 2;
-    hullMesh.position.set(0, 0.35, 2.5);
+    hullMesh.position.set(0, 0.7, 2.5);  // Raised hull to float on water
     hullMesh.castShadow = true;
     hullMesh.receiveShadow = true;
     cannonBase.add(hullMesh);

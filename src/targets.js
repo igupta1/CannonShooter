@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { randomInRange, pingPong } from './utils.js';
 
 const targets = [];
-const TARGET_HEIGHT = 0.3; // Height slightly above water surface
+const TARGET_HEIGHT = 0.5;
 
 // Movement parameters
 const SHIP_RADIUS = 4.0; // Safe radius around each ship (prevents touching)
@@ -57,98 +57,72 @@ function spawnTarget(scene, treasureX, treasureZ, orbitRadius, startAngle, treas
     // Create a group for the enemy warship
     const shipGroup = new THREE.Group();
     
-    // Enemy warship colors - menacing dark palette
-    const hullDark = 0x1A1A2E;        // Very dark blue-black
-    const hullMid = 0x2D3A4A;         // Dark slate blue
-    const metalDark = 0x1F2937;       // Gun metal
-    const accentRed = 0x8B0000;       // Dark crimson
+    // Enemy warship colors - visible navy palette
+    const hullDark = 0x2C3E50;        // Navy blue (more visible)
+    const hullMid = 0x34495E;         // Slate blue
+    const metalDark = 0x2C3E50;       // Gun metal
+    const accentRed = 0xC0392B;       // Brighter red stripe
     const accentGold = 0xB8860B;      // Dark gold/brass
     const glassBlue = 0x4A6FA5;       // Tinted window glass
     const smokestackBlack = 0x222222; // Near black
     const deckGray = 0x374151;        // Dark deck
     
-    // ============ MAIN HULL - Sleek warship shape ============
-    const hullShape = new THREE.Shape();
-    hullShape.moveTo(-0.7, 0);
-    hullShape.lineTo(-0.85, 0.25);
-    hullShape.lineTo(-0.8, 0.55);
-    hullShape.lineTo(0.8, 0.55);
-    hullShape.lineTo(0.85, 0.25);
-    hullShape.lineTo(0.7, 0);
-    hullShape.lineTo(-0.7, 0);
-    
-    const hullExtrudeSettings = { depth: 3.5, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.04 };
-    const hullGeometry = new THREE.ExtrudeGeometry(hullShape, hullExtrudeSettings);
+    // ============ MAIN HULL - Simple box hull ============
+    const hullGeometry = new THREE.BoxGeometry(1.6, 0.7, 3.5);
     const hullMaterial = new THREE.MeshStandardMaterial({
         color: hullDark,
         roughness: 0.6,
         metalness: 0.5
     });
     const hullMesh = new THREE.Mesh(hullGeometry, hullMaterial);
-    hullMesh.rotation.x = Math.PI / 2;
-    hullMesh.position.set(0, 0.28, 1.75);
+    hullMesh.position.set(0, 0.35, 0);
     hullMesh.castShadow = true;
     hullMesh.receiveShadow = true;
     shipGroup.add(hullMesh);
     
-    // Hull stripe (waterline)
-    const stripeGeometry = new THREE.BoxGeometry(1.75, 0.08, 3.7);
+    // Hull stripe (waterline) - red accent
+    const stripeGeometry = new THREE.BoxGeometry(1.65, 0.15, 3.6);
     const stripeMaterial = new THREE.MeshStandardMaterial({ color: accentRed, roughness: 0.4, metalness: 0.3 });
     const stripeMesh = new THREE.Mesh(stripeGeometry, stripeMaterial);
-    stripeMesh.position.set(0, 0.35, 0);
+    stripeMesh.position.set(0, 0.55, 0);
     shipGroup.add(stripeMesh);
     
     // ============ DECK ============
     const deckGeometry = new THREE.BoxGeometry(1.5, 0.08, 3.3);
     const deckMaterial = new THREE.MeshStandardMaterial({ color: deckGray, roughness: 0.75, metalness: 0.3 });
     const deckMesh = new THREE.Mesh(deckGeometry, deckMaterial);
-    deckMesh.position.set(0, 0.62, 0);
+    deckMesh.position.set(0, 0.75, 0);
     deckMesh.castShadow = true;
     deckMesh.receiveShadow = true;
     shipGroup.add(deckMesh);
     
-    // Deck detail (single stripe instead of multiple lines for performance)
-    const deckStripeGeometry = new THREE.BoxGeometry(1.4, 0.02, 0.1);
-    const deckStripeMat = new THREE.MeshStandardMaterial({ color: 0x1F2937, roughness: 0.8 });
-    const deckStripe = new THREE.Mesh(deckStripeGeometry, deckStripeMat);
-    deckStripe.position.set(0, 0.67, 0);
-    shipGroup.add(deckStripe);
-    
     // ============ BOW (FRONT) - Sharp pointed section ============
-    const bowGeometry = new THREE.ConeGeometry(0.55, 1.4, 4);
+    const bowGeometry = new THREE.ConeGeometry(0.5, 1.2, 4);
     const bowMaterial = new THREE.MeshStandardMaterial({ color: hullDark, roughness: 0.6, metalness: 0.5 });
     const bowMesh = new THREE.Mesh(bowGeometry, bowMaterial);
     bowMesh.rotation.x = Math.PI / 2;
     bowMesh.rotation.z = Math.PI / 4;
-    bowMesh.position.set(0, 0.38, -2.35);
+    bowMesh.position.set(0, 0.35, -2.3);
     bowMesh.castShadow = true;
     shipGroup.add(bowMesh);
     
-    // Bow ram/blade
-    const ramGeometry = new THREE.BoxGeometry(0.08, 0.25, 0.8);
-    const ramMaterial = new THREE.MeshStandardMaterial({ color: metalDark, roughness: 0.4, metalness: 0.8 });
-    const ramMesh = new THREE.Mesh(ramGeometry, ramMaterial);
-    ramMesh.position.set(0, 0.25, -2.7);
-    ramMesh.castShadow = true;
-    shipGroup.add(ramMesh);
-    
     // ============ SUPERSTRUCTURE - Modern bridge ============
     // Lower superstructure
-    const superGeometry = new THREE.BoxGeometry(1.1, 0.45, 1.6);
+    const superGeometry = new THREE.BoxGeometry(1.1, 0.4, 1.4);
     const superMaterial = new THREE.MeshStandardMaterial({ color: hullMid, roughness: 0.65, metalness: 0.4 });
     const superMesh = new THREE.Mesh(superGeometry, superMaterial);
-    superMesh.position.set(0, 0.88, 0.2);
+    superMesh.position.set(0, 1.0, 0.2);
     superMesh.castShadow = true;
     shipGroup.add(superMesh);
     
     // Bridge deck
-    const bridgeDeckGeometry = new THREE.BoxGeometry(0.9, 0.35, 1.2);
+    const bridgeDeckGeometry = new THREE.BoxGeometry(0.85, 0.3, 1.0);
     const bridgeDeckMesh = new THREE.Mesh(bridgeDeckGeometry, superMaterial);
-    bridgeDeckMesh.position.set(0, 1.28, 0.1);
+    bridgeDeckMesh.position.set(0, 1.35, 0.1);
     bridgeDeckMesh.castShadow = true;
     shipGroup.add(bridgeDeckMesh);
     
-    // Bridge windows (wraparound)
+    // Bridge windows
     const windowMaterial = new THREE.MeshStandardMaterial({ 
         color: glassBlue, 
         roughness: 0.1, 
@@ -157,101 +131,77 @@ function spawnTarget(scene, treasureX, treasureZ, orbitRadius, startAngle, treas
         opacity: 0.7
     });
     
-    // Front windows
-    const frontWindowGeometry = new THREE.BoxGeometry(0.75, 0.18, 0.05);
+    const frontWindowGeometry = new THREE.BoxGeometry(0.7, 0.15, 0.05);
     const frontWindow = new THREE.Mesh(frontWindowGeometry, windowMaterial);
-    frontWindow.position.set(0, 1.35, -0.55);
+    frontWindow.position.set(0, 1.4, -0.45);
     shipGroup.add(frontWindow);
     
-    // Side windows
-    for (let side = -1; side <= 1; side += 2) {
-        const sideWindowGeometry = new THREE.BoxGeometry(0.05, 0.18, 0.5);
-        const sideWindow = new THREE.Mesh(sideWindowGeometry, windowMaterial);
-        sideWindow.position.set(side * 0.48, 1.35, -0.25);
-        shipGroup.add(sideWindow);
-    }
-    
-    // Window frame trim
-    const frameMaterial = new THREE.MeshStandardMaterial({ color: accentGold, roughness: 0.3, metalness: 0.7 });
-    const frameTopGeometry = new THREE.BoxGeometry(0.8, 0.03, 0.08);
-    const frameTop = new THREE.Mesh(frameTopGeometry, frameMaterial);
-    frameTop.position.set(0, 1.45, -0.55);
-    shipGroup.add(frameTop);
-    
     // ============ MAST/RADAR TOWER ============
-    const mastGeometry = new THREE.CylinderGeometry(0.04, 0.06, 1.0, 8);
+    const mastGeometry = new THREE.CylinderGeometry(0.04, 0.05, 0.8, 6);
     const mastMaterial = new THREE.MeshStandardMaterial({ color: metalDark, roughness: 0.5, metalness: 0.7 });
     const mastMesh = new THREE.Mesh(mastGeometry, mastMaterial);
-    mastMesh.position.set(0, 1.95, 0.1);
+    mastMesh.position.set(0, 1.9, 0.1);
     mastMesh.castShadow = true;
     shipGroup.add(mastMesh);
     
-    // Radar array (simplified)
-    const radarDishGeometry = new THREE.CylinderGeometry(0.25, 0.25, 0.04, 8);
-    const radarDishMaterial = new THREE.MeshStandardMaterial({ color: 0x3A3A3A, roughness: 0.4, metalness: 0.6 });
+    // Radar dish
+    const radarDishGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.04, 6);
+    const radarDishMaterial = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.4, metalness: 0.6 });
     const radarDish = new THREE.Mesh(radarDishGeometry, radarDishMaterial);
-    radarDish.position.set(0, 2.5, 0.1);
+    radarDish.position.set(0, 2.35, 0.1);
     shipGroup.add(radarDish);
     
-    // Single radar antenna (simplified)
-    const antennaGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.5, 4);
-    const antenna = new THREE.Mesh(antennaGeometry, mastMaterial);
-    antenna.position.set(0, 2.75, 0.1);
-    shipGroup.add(antenna);
-    
-    // ============ SMOKESTACK (simplified) ============
-    const stackGeometry = new THREE.CylinderGeometry(0.12, 0.16, 0.6, 6);
+    // ============ SMOKESTACK ============
+    const stackGeometry = new THREE.CylinderGeometry(0.1, 0.14, 0.5, 6);
     const stackMaterial = new THREE.MeshStandardMaterial({ color: smokestackBlack, roughness: 0.7, metalness: 0.4 });
     const stackMesh = new THREE.Mesh(stackGeometry, stackMaterial);
-    stackMesh.position.set(0, 1.4, 0.8);
+    stackMesh.position.set(0, 1.25, 0.7);
     shipGroup.add(stackMesh);
     
     // Stack band (red accent)
-    const bandGeometry = new THREE.CylinderGeometry(0.14, 0.14, 0.08, 6);
+    const bandGeometry = new THREE.CylinderGeometry(0.12, 0.12, 0.06, 6);
     const band = new THREE.Mesh(bandGeometry, new THREE.MeshStandardMaterial({ color: accentRed, roughness: 0.5 }));
-    band.position.set(0, 1.55, 0.8);
+    band.position.set(0, 1.38, 0.7);
     shipGroup.add(band);
     
-    // ============ WEAPONS SYSTEMS (simplified) ============
-    // Main turret (forward)
+    // ============ WEAPONS - Main turret ============
     const turretMaterial = new THREE.MeshStandardMaterial({ color: metalDark, roughness: 0.5, metalness: 0.75 });
-    const turretBaseGeometry = new THREE.CylinderGeometry(0.25, 0.28, 0.18, 6);
+    const turretBaseGeometry = new THREE.CylinderGeometry(0.22, 0.25, 0.15, 6);
     const turretBase = new THREE.Mesh(turretBaseGeometry, turretMaterial);
-    turretBase.position.set(0, 0.75, -1.2);
+    turretBase.position.set(0, 0.87, -1.0);
     shipGroup.add(turretBase);
     
     // Main cannon barrel
-    const mainCannonGeometry = new THREE.CylinderGeometry(0.08, 0.1, 1.0, 6);
+    const mainCannonGeometry = new THREE.CylinderGeometry(0.07, 0.09, 0.8, 6);
     const mainCannon = new THREE.Mesh(mainCannonGeometry, turretMaterial);
     mainCannon.rotation.x = Math.PI / 2;
-    mainCannon.position.set(0, 0.85, -1.7);
+    mainCannon.position.set(0, 0.95, -1.5);
     shipGroup.add(mainCannon);
     
-    // Side cannons (simplified - no mounts)
-    const sideCannonGeometry = new THREE.CylinderGeometry(0.05, 0.06, 0.5, 6);
+    // Side cannons
+    const sideCannonGeometry = new THREE.CylinderGeometry(0.04, 0.05, 0.4, 6);
     const leftCannon = new THREE.Mesh(sideCannonGeometry, turretMaterial);
     leftCannon.rotation.z = -Math.PI / 2;
-    leftCannon.position.set(-0.85, 0.75, 0);
+    leftCannon.position.set(-0.75, 0.85, 0);
     shipGroup.add(leftCannon);
     
     const rightCannon = new THREE.Mesh(sideCannonGeometry, turretMaterial);
     rightCannon.rotation.z = Math.PI / 2;
-    rightCannon.position.set(0.85, 0.75, 0);
+    rightCannon.position.set(0.75, 0.85, 0);
     shipGroup.add(rightCannon);
     
-    // ============ STERN (REAR) DETAILS ============
-    // Stern structure
-    const sternGeometry = new THREE.BoxGeometry(1.3, 0.5, 0.6);
+    // ============ STERN ============
+    const sternGeometry = new THREE.BoxGeometry(1.2, 0.4, 0.5);
     const sternMesh = new THREE.Mesh(sternGeometry, superMaterial);
-    sternMesh.position.set(0, 0.85, 1.4);
+    sternMesh.position.set(0, 0.95, 1.3);
     sternMesh.castShadow = true;
     shipGroup.add(sternMesh);
     
-    // Stern railing
-    const railGeometry = new THREE.BoxGeometry(1.4, 0.08, 0.04);
+    // Railing
+    const railGeometry = new THREE.BoxGeometry(1.3, 0.06, 0.04);
     const railMaterial = new THREE.MeshStandardMaterial({ color: metalDark, roughness: 0.5, metalness: 0.6 });
     const sternRail = new THREE.Mesh(railGeometry, railMaterial);
-    sternRail.position.set(0, 1.15, 1.72);
+    sternRail.position.set(0, 1.18, 1.55);
     shipGroup.add(sternRail);
     
     
@@ -259,7 +209,7 @@ function spawnTarget(scene, treasureX, treasureZ, orbitRadius, startAngle, treas
     for (let side = -1; side <= 1; side += 2) {
         const sideRailGeometry = new THREE.BoxGeometry(0.04, 0.06, 2.5);
         const sideRail = new THREE.Mesh(sideRailGeometry, railMaterial);
-        sideRail.position.set(side * 0.72, 0.75, -0.2);
+        sideRail.position.set(side * 0.72, 1.07, -0.2);  // Raised
         shipGroup.add(sideRail);
     }
     
@@ -267,7 +217,7 @@ function spawnTarget(scene, treasureX, treasureZ, orbitRadius, startAngle, treas
     const flagPoleGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.6, 6);
     const flagPoleMaterial = new THREE.MeshStandardMaterial({ color: metalDark, roughness: 0.5, metalness: 0.7 });
     const flagPole = new THREE.Mesh(flagPoleGeometry, flagPoleMaterial);
-    flagPole.position.set(0, 1.4, 1.6);
+    flagPole.position.set(0, 1.72, 1.6);  // Raised
     shipGroup.add(flagPole);
     
     // Enemy flag (red/black)
@@ -285,7 +235,7 @@ function spawnTarget(scene, treasureX, treasureZ, orbitRadius, startAngle, treas
         side: THREE.DoubleSide
     });
     const flagMesh = new THREE.Mesh(flagGeometry, flagMaterial);
-    flagMesh.position.set(0.22, 1.55, 1.6);
+    flagMesh.position.set(0.22, 1.87, 1.6);  // Raised
     flagMesh.rotation.y = Math.PI / 2;
     shipGroup.add(flagMesh);
     
@@ -306,11 +256,11 @@ function spawnTarget(scene, treasureX, treasureZ, orbitRadius, startAngle, treas
     
     const lightGeometry = new THREE.SphereGeometry(0.04, 8, 8);
     const portLight = new THREE.Mesh(lightGeometry, lightMaterial);
-    portLight.position.set(-0.78, 0.5, -1.0);
+    portLight.position.set(-0.78, 0.82, -1.0);  // Raised
     shipGroup.add(portLight);
     
     const starboardLight = new THREE.Mesh(lightGeometry, greenLightMaterial);
-    starboardLight.position.set(0.78, 0.5, -1.0);
+    starboardLight.position.set(0.78, 0.82, -1.0);  // Raised
     shipGroup.add(starboardLight);
     
     // Masthead light
@@ -320,7 +270,7 @@ function spawnTarget(scene, treasureX, treasureZ, orbitRadius, startAngle, treas
         emissiveIntensity: 0.4,
         roughness: 0.3
     }));
-    mastheadLight.position.set(0, 3.0, 0.1);
+    mastheadLight.position.set(0, 3.32, 0.1);  // Raised
     shipGroup.add(mastheadLight);
     
     // ============ DECK EQUIPMENT (simplified) ============
@@ -328,7 +278,7 @@ function spawnTarget(scene, treasureX, treasureZ, orbitRadius, startAngle, treas
     const raftGeometry = new THREE.BoxGeometry(0.3, 0.1, 0.3);
     const raftMaterial = new THREE.MeshStandardMaterial({ color: 0xFF6600, roughness: 0.8 });
     const raft = new THREE.Mesh(raftGeometry, raftMaterial);
-    raft.position.set(0.4, 1.12, 0.5);
+    raft.position.set(0.4, 1.44, 0.5);  // Raised
     shipGroup.add(raft);
 
     // Calculate initial position on orbit

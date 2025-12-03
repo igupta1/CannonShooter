@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 
 const treasures = [];
-const CHEST_HEIGHT = 0.5; // Height above water surface
+const CHEST_HEIGHT = 0.8;
 
 /**
  * Creates an optimized treasure chest 3D model
