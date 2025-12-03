@@ -9,77 +9,110 @@ const treasures = [];
 const CHEST_HEIGHT = 0.5; // Height above water surface
 
 /**
- * Creates a treasure chest 3D model
- * @returns {THREE.Group} Chest group
+ * Creates an optimized treasure chest 3D model
+ * @returns {Object} Chest group and materials for animation
  */
 function createChestModel() {
     const chestGroup = new THREE.Group();
 
-    // Chest colors - brighter and more vibrant
-    const woodBrown = 0xA0522D;
+    // Rich color palette
+    const darkWood = 0x3D2817;
+    const richWood = 0x6B4423;
     const goldColor = 0xFFD700;
     const brightGold = 0xFFE55C;
-    const darkWood = 0x8B4513;
 
-    // Main chest body (bottom part) - brighter wood
-    const bodyGeometry = new THREE.BoxGeometry(1.2, 0.8, 0.8);
+    // ============ CHEST BODY ============
+    const bodyGeometry = new THREE.BoxGeometry(1.4, 0.9, 1.0);
     const bodyMaterial = new THREE.MeshStandardMaterial({
-        color: woodBrown,
-        roughness: 0.6,
-        metalness: 0.3,
-        emissive: 0x4A2511,
-        emissiveIntensity: 0.2
+        color: richWood,
+        roughness: 0.65,
+        metalness: 0.15
     });
     const bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    bodyMesh.position.y = 0.4;
+    bodyMesh.position.y = 0.45;
     bodyMesh.castShadow = true;
-    bodyMesh.receiveShadow = true;
     chestGroup.add(bodyMesh);
 
-    // Chest lid (top part)
-    const lidGeometry = new THREE.BoxGeometry(1.2, 0.4, 0.8);
+    // Inner gold rim (glowing interior)
+    const innerRimGeometry = new THREE.BoxGeometry(1.2, 0.15, 0.8);
+    const innerGoldMaterial = new THREE.MeshStandardMaterial({
+        color: brightGold,
+        roughness: 0.2,
+        metalness: 0.9,
+        emissive: goldColor,
+        emissiveIntensity: 1.0
+    });
+    const innerRim = new THREE.Mesh(innerRimGeometry, innerGoldMaterial);
+    innerRim.position.y = 0.95;
+    chestGroup.add(innerRim);
+
+    // ============ DOMED LID (simplified) ============
+    const lidCurveGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1.3, 8, 1, false, 0, Math.PI);
     const lidMaterial = new THREE.MeshStandardMaterial({
         color: darkWood,
         roughness: 0.6,
-        metalness: 0.3,
-        emissive: 0x3D2310,
-        emissiveIntensity: 0.2
+        metalness: 0.2
     });
-    const lidMesh = new THREE.Mesh(lidGeometry, lidMaterial);
-    lidMesh.position.y = 1.0;
+    const lidMesh = new THREE.Mesh(lidCurveGeometry, lidMaterial);
+    lidMesh.rotation.z = Math.PI / 2;
+    lidMesh.rotation.y = Math.PI / 2;
+    lidMesh.position.set(0, 1.0, 0);
     lidMesh.castShadow = true;
     chestGroup.add(lidMesh);
 
-    // Gold trim/lock on front - glowing gold
-    const lockGeometry = new THREE.BoxGeometry(0.3, 0.3, 0.15);
-    const lockMaterial = new THREE.MeshStandardMaterial({
-        color: brightGold,
+    // ============ GOLD TRIM (simplified - shared material) ============
+    const goldMaterial = new THREE.MeshStandardMaterial({
+        color: goldColor,
         roughness: 0.2,
-        metalness: 1.0,
+        metalness: 0.95,
         emissive: goldColor,
-        emissiveIntensity: 0.6
+        emissiveIntensity: 0.8
     });
-    const lockMesh = new THREE.Mesh(lockGeometry, lockMaterial);
-    lockMesh.position.set(0, 0.4, 0.5);
-    lockMesh.castShadow = true;
-    chestGroup.add(lockMesh);
 
-    // Gold bands (horizontal) - glowing
-    const bandGeometry = new THREE.BoxGeometry(1.3, 0.1, 0.85);
-    const band1 = new THREE.Mesh(bandGeometry, lockMaterial);
-    band1.position.y = 0.3;
-    band1.castShadow = true;
+    // Gold bands (2 horizontal)
+    const bandGeometry = new THREE.BoxGeometry(1.5, 0.1, 1.1);
+    const band1 = new THREE.Mesh(bandGeometry, goldMaterial);
+    band1.position.y = 0.2;
     chestGroup.add(band1);
 
-    const band2 = new THREE.Mesh(bandGeometry, lockMaterial);
+    const band2 = new THREE.Mesh(bandGeometry, goldMaterial);
     band2.position.y = 0.7;
-    band2.castShadow = true;
     chestGroup.add(band2);
 
-    // Add a point light for glow effect
-    const glowLight = new THREE.PointLight(goldColor, 1.5, 8);
-    glowLight.position.set(0, 0.6, 0);
-    chestGroup.add(glowLight);
+    // ============ LOCK ============
+    const lockGeometry = new THREE.BoxGeometry(0.35, 0.45, 0.1);
+    const lockMesh = new THREE.Mesh(lockGeometry, goldMaterial);
+    lockMesh.position.set(0, 0.5, 0.55);
+    chestGroup.add(lockMesh);
+
+    // Lock hasp
+    const haspGeometry = new THREE.TorusGeometry(0.1, 0.03, 4, 8, Math.PI);
+    const hasp = new THREE.Mesh(haspGeometry, goldMaterial);
+    hasp.rotation.z = Math.PI;
+    hasp.position.set(0, 0.78, 0.55);
+    chestGroup.add(hasp);
+
+    // ============ GEM (single center gem) ============
+    const gemGeometry = new THREE.OctahedronGeometry(0.12, 0);
+    const gemMaterial = new THREE.MeshStandardMaterial({
+        color: 0xDC143C,
+        roughness: 0.1,
+        metalness: 0.3,
+        emissive: 0xDC143C,
+        emissiveIntensity: 0.5
+    });
+    const gem = new THREE.Mesh(gemGeometry, gemMaterial);
+    gem.position.set(0, 1.35, 0);
+    gem.rotation.y = Math.PI / 4;
+    chestGroup.add(gem);
+
+    // Store references for animation (NO lights - use emissive only)
+    chestGroup.userData = {
+        goldMaterial: goldMaterial,
+        innerGoldMaterial: innerGoldMaterial,
+        gemMaterial: gemMaterial,
+        baseEmissiveIntensity: 0.8
+    };
 
     return chestGroup;
 }
@@ -140,7 +173,7 @@ export function spawnTreasures(scene, count) {
 }
 
 /**
- * Updates treasure chests (floating animation, rotation)
+ * Updates treasure chests (floating animation, rotation, pulsing glow)
  * @param {number} deltaTime - Time since last frame in seconds
  */
 export function updateTreasures(deltaTime) {
@@ -149,11 +182,34 @@ export function updateTreasures(deltaTime) {
 
         // Floating animation
         treasure.floatTime += deltaTime;
-        const floatOffset = Math.sin(treasure.floatTime * 2) * 0.1;
+        const floatOffset = Math.sin(treasure.floatTime * 2) * 0.15;
         treasure.mesh.position.y = CHEST_HEIGHT + floatOffset;
 
         // Gentle rotation
         treasure.mesh.rotation.y += deltaTime * 0.5;
+
+        // Pulsing glow animation (emissive materials only - no lights)
+        const userData = treasure.mesh.userData;
+        if (userData && userData.goldMaterial) {
+            // Create a smooth pulsing effect using sin wave
+            const pulseSpeed = 2.5;
+            const pulse = (Math.sin(treasure.floatTime * pulseSpeed) + 1) / 2; // 0 to 1
+            
+            // Pulse emissive intensity on gold materials
+            const baseIntensity = userData.baseEmissiveIntensity || 0.8;
+            const minPulse = baseIntensity * 0.5;
+            const maxPulse = baseIntensity * 1.3;
+            const emissivePulse = minPulse + pulse * (maxPulse - minPulse);
+            
+            userData.goldMaterial.emissiveIntensity = emissivePulse;
+            
+            if (userData.innerGoldMaterial) {
+                userData.innerGoldMaterial.emissiveIntensity = emissivePulse * 1.2;
+            }
+            if (userData.gemMaterial) {
+                userData.gemMaterial.emissiveIntensity = 0.3 + pulse * 0.5;
+            }
+        }
     }
 }
 
