@@ -2,8 +2,6 @@
 
 A 3D cannon shooting game built with Three.js that demonstrates interactive graphics, physics simulation, collision detection, and real-time shadowing.
 
-![Game Screenshot](docs/screenshot.png)
-
 ## 🎮 Game Overview
 
 Aim a ground-mounted cannon and fire spherical cannonballs at moving box targets. The player aims with the mouse, charges power by holding the mouse button, and fires on release. Hit targets to increase your score before the 60-second timer runs out!
@@ -269,15 +267,6 @@ This project is an original implementation for CS174A. All code written from scr
 - Basic HTML/CSS structure
 
 No tutorials, templates, or external codebases were used. All algorithms implemented manually per project requirements.
-
-## 📞 Credits
-
-**Developer**: Ishaan Gupta  
-**Course**: CS174A - Introduction to Computer Graphics  
-**Technology**: Three.js r160, WebGL, JavaScript ES6+  
-**License**: MIT (for educational purposes)
-
----
 
 **Enjoy the game! 🎯🎮**
 
