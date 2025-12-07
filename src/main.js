@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { createScene, handleResize, scene, camera, renderer, controls, updateWater, updateShipWakes, updateCamera } from './scene.js';
 import { createCannon, setYawPitch, getMuzzlePosition, getFiringDirection, cannonGroup } from './cannon.js';
 import { spawnProjectile, updateProjectiles, getProjectiles, clearAllProjectiles, killProjectile, despawnProjectile, createExplosion } from './projectile.js';
-import { spawnTargets, updateTargets, getTargets, clearAllTargets, resetTarget, hitTarget } from './targets.js';
+import { spawnTargets, updateTargets, getTargets, clearAllTargets, resetTarget, hitTarget, spawnBossShip } from './targets.js';
 import { spawnTreasures, updateTreasures, checkTreasureCollection, collectTreasure, clearAllTreasures, getCollectedCount, getTotalCount } from './treasures.js';
 import { sphereVsAABB, getAABBFromMesh } from './collision.js';
 import { initInput, updateAiming, updateCharging, checkFire, getAimAngles, getCurrentCharge, updateShipMovement, addRestartListener as addInputRestartListener, resetShipPosition, isFreeCameraMode, setCameraModeCallback } from './input.js';
@@ -78,15 +78,20 @@ function startGame() {
     clearAllTreasures(scene);
 
     // Reset player ship position and rotation
-    cannonGroup.position.set(0, 0, 0);
+    cannonGroup.position.set(0, 0, 40);
     cannonGroup.rotation.y = 0;
     resetShipPosition();
 
-    // Spawn treasure chests first
-    const treasurePositions = spawnTreasures(scene, TREASURE_COUNT);
+    // Spawn treasure chests first (includes mega chest)
+    const { treasurePositions, megaChestPosition } = spawnTreasures(scene, TREASURE_COUNT);
 
-    // Spawn guard ships around each treasure (5 ships per treasure)
+    // Spawn guard ships around each treasure (1 ship per treasure)
     spawnTargets(scene, treasurePositions, SHIPS_PER_TREASURE);
+
+    // Spawn the boss ship near the mega chest but patrolling in front of it
+    if (megaChestPosition) {
+        spawnBossShip(scene, megaChestPosition.x, megaChestPosition.z + 10);
+    }
 
     // Reset HUD
     resetHUD();
@@ -159,8 +164,8 @@ function updateGame(currentTime, deltaTime) {
     // Update projectiles with physics
     updateProjectiles(deltaTime, scene);
 
-    // Update targets with enemy shooting AI
-    updateTargets(deltaTime, cannonGroup.position, shootEnemyProjectile);
+    // Update targets with enemy shooting AI (boss uses one-shot projectile)
+    updateTargets(deltaTime, cannonGroup.position, shootEnemyProjectile, shootBossProjectile);
 
     // Update treasure chests
     updateTreasures(deltaTime);
@@ -169,10 +174,12 @@ function updateGame(currentTime, deltaTime) {
     const collectedTreasure = checkTreasureCollection(cannonGroup.position);
     if (collectedTreasure) {
         collectTreasure(scene, collectedTreasure);
-        score += 10; // 10 points per treasure
+        // Mega chest is worth 50 points, regular chests are 10 points
+        const points = collectedTreasure.isMegaChest ? 50 : 10;
+        score += points;
         updateScore(score);
         updateTreasureCount(getCollectedCount(), getTotalCount());
-        
+
         // Check if all treasures collected (victory condition!)
         if (getCollectedCount() >= getTotalCount()) {
             gameOverReason = 'victory';
@@ -217,6 +224,16 @@ function shootEnemyProjectile(position, direction) {
 }
 
 /**
+ * Fires a boss projectile at the player (one-shot kill)
+ * @param {THREE.Vector3} position - Boss cannon position
+ * @param {THREE.Vector3} direction - Direction to shoot
+ */
+function shootBossProjectile(position, direction) {
+    const speed = 25; // Boss projectile is faster
+    spawnProjectile(scene, position, direction, speed, 'boss');
+}
+
+/**
  * Checks for collisions between projectiles and targets/player
  */
 function checkCollisions() {
@@ -257,7 +274,7 @@ function checkCollisions() {
             }
         }
         // Enemy projectiles hit player
-        else if (proj.type === 'enemy') {
+        else if (proj.type === 'enemy' || proj.type === 'boss') {
             // Simple sphere collision with player ship
             const playerPos = cannonGroup.position;
             const dx = projPos.x - playerPos.x;
@@ -270,10 +287,15 @@ function checkCollisions() {
                 // Create explosion at player ship position
                 const explosionPos = cannonGroup.position.clone();
                 explosionPos.y += 1; // Slightly above ship
-                createExplosion(scene, explosionPos, 0xFF2200);
-                
-                // Player hit by enemy projectile - Reduce health!
-                playerHealth--;
+
+                // Boss projectile is instant kill (larger, red explosion)
+                if (proj.type === 'boss') {
+                    createExplosion(scene, explosionPos, 0xFF0000);
+                    playerHealth = 0; // Instant death
+                } else {
+                    createExplosion(scene, explosionPos, 0xFF2200);
+                    playerHealth--;
+                }
                 updatePlayerHealth(playerHealth);
 
                 killProjectile(i);
@@ -281,7 +303,7 @@ function checkCollisions() {
 
                 // Check if player died
                 if (playerHealth <= 0) {
-                    gameOverReason = 'hit';
+                    gameOverReason = proj.type === 'boss' ? 'boss' : 'hit';
                     endGame();
                     return;
                 }
@@ -308,8 +330,8 @@ function checkCollisions() {
                     continue;
                 }
 
-                // Check if proj2 is an enemy projectile
-                if (proj2.type === 'enemy') {
+                // Check if proj2 is an enemy or boss projectile
+                if (proj2.type === 'enemy' || proj2.type === 'boss') {
                     // Calculate distance between projectiles
                     const dx = proj1.mesh.position.x - proj2.mesh.position.x;
                     const dy = proj1.mesh.position.y - proj2.mesh.position.y;
@@ -359,35 +381,82 @@ function updatePlayerHealth(health) {
  * Handles a target being hit
  */
 function onTargetHit(target) {
-    // Increment score
-    score++;
-    updateScore(score);
+    // Trigger hit animation
+    hitTarget(target);
 
-    // Create explosion at ship position
-    const explosionPos = target.mesh.position.clone();
-    explosionPos.y += 1; // Slightly above ship center
-    createExplosion(scene, explosionPos, 0xFF4400);
+    // Boss ships require multiple hits
+    if (target.isBoss) {
+        // Check if boss is destroyed (4 hits)
+        if (target.hits >= target.maxHits) {
+            // Boss destroyed! Big score bonus
+            score += 20;
+            updateScore(score);
 
-    // Mark target as destroyed (stop moving and hide)
-    target.isMoving = false;
-    target.destroyed = true;
+            // Create large explosion at boss position
+            const explosionPos = target.mesh.position.clone();
+            explosionPos.y += 3; // Higher for boss
+            createExplosion(scene, explosionPos, 0xFF0000);
 
-    // Remove ship from scene
-    scene.remove(target.mesh);
+            // Mark target as destroyed
+            target.isMoving = false;
+            target.destroyed = true;
 
-    // Dispose of geometries and materials
-    target.mesh.traverse((child) => {
-        if (child.geometry) {
-            child.geometry.dispose();
+            // Remove ship from scene
+            scene.remove(target.mesh);
+
+            // Dispose of geometries and materials
+            target.mesh.traverse((child) => {
+                if (child.geometry) {
+                    child.geometry.dispose();
+                }
+                if (child.material) {
+                    if (Array.isArray(child.material)) {
+                        child.material.forEach(mat => mat.dispose());
+                    } else {
+                        child.material.dispose();
+                    }
+                }
+            });
+        } else {
+            // Boss took a hit but not destroyed - small explosion, 1 point
+            score++;
+            updateScore(score);
+
+            const explosionPos = target.mesh.position.clone();
+            explosionPos.y += 2;
+            createExplosion(scene, explosionPos, 0xFF6600);
         }
-        if (child.material) {
-            if (Array.isArray(child.material)) {
-                child.material.forEach(mat => mat.dispose());
-            } else {
-                child.material.dispose();
+    } else {
+        // Regular ship - destroyed in one hit
+        score++;
+        updateScore(score);
+
+        // Create explosion at ship position
+        const explosionPos = target.mesh.position.clone();
+        explosionPos.y += 1; // Slightly above ship center
+        createExplosion(scene, explosionPos, 0xFF4400);
+
+        // Mark target as destroyed (stop moving and hide)
+        target.isMoving = false;
+        target.destroyed = true;
+
+        // Remove ship from scene
+        scene.remove(target.mesh);
+
+        // Dispose of geometries and materials
+        target.mesh.traverse((child) => {
+            if (child.geometry) {
+                child.geometry.dispose();
             }
-        }
-    });
+            if (child.material) {
+                if (Array.isArray(child.material)) {
+                    child.material.forEach(mat => mat.dispose());
+                } else {
+                    child.material.dispose();
+                }
+            }
+        });
+    }
 }
 
 /**
@@ -430,6 +499,8 @@ function endGame() {
         showGameOver(score, 'Congrats! You Won!');
     } else if (gameOverReason === 'collision') {
         showGameOver(score, 'Ship Collision!');
+    } else if (gameOverReason === 'boss') {
+        showGameOver(score, 'Obliterated by Boss!');
     } else if (gameOverReason === 'hit') {
         showGameOver(score, 'Hit by Enemy Fire!');
     } else {

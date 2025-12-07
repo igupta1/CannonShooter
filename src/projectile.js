@@ -27,17 +27,42 @@ const fadingTrails = [];
  * @param {THREE.Vector3} origin - Starting position
  * @param {THREE.Vector3} direction - Normalized direction vector
  * @param {number} speed - Initial speed
- * @param {string} type - 'player' or 'enemy'
+ * @param {string} type - 'player', 'enemy', or 'boss'
  */
 export function spawnProjectile(scene, origin, direction, speed, type = 'player') {
+    // Boss projectiles are larger
+    const radius = type === 'boss' ? PROJECTILE_RADIUS * 2.5 : PROJECTILE_RADIUS;
+
+    // Determine colors based on type
+    let color, emissiveColor, emissiveIntensity, lightColor, lightIntensity;
+    if (type === 'boss') {
+        color = 0x8B0000;           // Dark red
+        emissiveColor = 0xFF0000;   // Bright red glow
+        emissiveIntensity = 1.2;    // Very bright
+        lightColor = 0xFF0000;
+        lightIntensity = 8;         // Very bright light
+    } else if (type === 'enemy') {
+        color = 0xFF4444;
+        emissiveColor = 0xFF0000;
+        emissiveIntensity = 0.4;
+        lightColor = 0xFF0000;
+        lightIntensity = 2;
+    } else {
+        color = 0x444444;
+        emissiveColor = 0xFF6600;
+        emissiveIntensity = 0.7;
+        lightColor = 0xFF6600;
+        lightIntensity = 3;
+    }
+
     // Create sphere geometry
-    const geometry = new THREE.SphereGeometry(PROJECTILE_RADIUS, 16, 16);
+    const geometry = new THREE.SphereGeometry(radius, 16, 16);
     const material = new THREE.MeshStandardMaterial({
-        color: type === 'enemy' ? 0xFF4444 : 0x444444, // Red for enemy, gray for player
+        color: color,
         roughness: 0.5,
         metalness: 0.9,
-        emissive: type === 'enemy' ? 0xFF0000 : 0xFF6600, // Orange glow for player, red for enemy
-        emissiveIntensity: type === 'enemy' ? 0.4 : 0.7
+        emissive: emissiveColor,
+        emissiveIntensity: emissiveIntensity
     });
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -47,12 +72,21 @@ export function spawnProjectile(scene, origin, direction, speed, type = 'player'
     scene.add(mesh);
 
     // Add point light to projectile for better visibility
-    const projectileLight = new THREE.PointLight(
-        type === 'enemy' ? 0xFF0000 : 0xFF6600, 
-        type === 'enemy' ? 2 : 3, 
-        8
-    );
+    const projectileLight = new THREE.PointLight(lightColor, lightIntensity, type === 'boss' ? 15 : 8);
     mesh.add(projectileLight);
+
+    // Boss projectiles have an outer glow ring
+    if (type === 'boss') {
+        const glowGeometry = new THREE.RingGeometry(radius * 1.2, radius * 1.8, 16);
+        const glowMaterial = new THREE.MeshBasicMaterial({
+            color: 0xFF0000,
+            transparent: true,
+            opacity: 0.6,
+            side: THREE.DoubleSide
+        });
+        const glowRing = new THREE.Mesh(glowGeometry, glowMaterial);
+        mesh.add(glowRing);
+    }
 
     // Create trajectory trail using dots (spheres for better visibility)
     const trailGroup = new THREE.Group();
@@ -62,18 +96,28 @@ export function spawnProjectile(scene, origin, direction, speed, type = 'player'
     // Calculate initial velocity
     const velocity = direction.clone().multiplyScalar(speed);
 
+    // Determine trail color
+    let trailColor;
+    if (type === 'boss') {
+        trailColor = 0xFF0000; // Bright red trail
+    } else if (type === 'enemy') {
+        trailColor = 0xFF4444;
+    } else {
+        trailColor = 0xFF8800;
+    }
+
     // Store projectile data
     projectiles.push({
         mesh,
         velocity,
         birthTime: performance.now() / 1000,
         alive: true,
-        radius: PROJECTILE_RADIUS,
-        type: type, // 'player' or 'enemy'
+        radius: radius,
+        type: type, // 'player', 'enemy', or 'boss'
         // Trail data
         trailGroup: trailGroup,
         trailDots: trailDots,
-        trailColor: type === 'enemy' ? 0xFF4444 : 0xFF8800,
+        trailColor: trailColor,
         lastTrailUpdate: performance.now() / 1000,
         distanceSinceLastDot: 0
     });
@@ -218,7 +262,7 @@ export function clearAllProjectiles(scene) {
     for (let i = projectiles.length - 1; i >= 0; i--) {
         despawnProjectile(i, scene);
     }
-    
+
     // Also clear all fading trails
     for (let i = fadingTrails.length - 1; i >= 0; i--) {
         const trail = fadingTrails[i];
@@ -229,6 +273,191 @@ export function clearAllProjectiles(scene) {
         });
     }
     fadingTrails.length = 0;
+
+    // Clear all active lasers
+    clearAllLasers(scene);
+}
+
+// Store active laser beams
+const activeLasers = [];
+
+/**
+ * Creates a boss laser beam that lasts 1 second
+ * @param {THREE.Scene} scene - Scene to add laser to
+ * @param {THREE.Vector3} origin - Start position of laser
+ * @param {THREE.Vector3} direction - Direction of laser
+ * @param {Function} onHitPlayer - Callback when laser hits player
+ */
+export function createBossLaser(scene, origin, direction, onHitPlayer) {
+    const laserLength = 150; // Very long range
+    const laserDuration = 1.0; // 1 second duration
+
+    // Create laser beam group
+    const laserGroup = new THREE.Group();
+
+    // Main laser beam (cylinder)
+    const beamGeometry = new THREE.CylinderGeometry(0.3, 0.3, laserLength, 8);
+    const beamMaterial = new THREE.MeshBasicMaterial({
+        color: 0xFF0000,
+        transparent: true,
+        opacity: 0.9
+    });
+    const beam = new THREE.Mesh(beamGeometry, beamMaterial);
+
+    // Inner core (brighter)
+    const coreGeometry = new THREE.CylinderGeometry(0.15, 0.15, laserLength, 8);
+    const coreMaterial = new THREE.MeshBasicMaterial({
+        color: 0xFFFFFF,
+        transparent: true,
+        opacity: 1.0
+    });
+    const core = new THREE.Mesh(coreGeometry, coreMaterial);
+
+    // Outer glow
+    const glowGeometry = new THREE.CylinderGeometry(0.6, 0.6, laserLength, 8);
+    const glowMaterial = new THREE.MeshBasicMaterial({
+        color: 0xFF4400,
+        transparent: true,
+        opacity: 0.4
+    });
+    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+
+    laserGroup.add(glow);
+    laserGroup.add(beam);
+    laserGroup.add(core);
+
+    // Position and rotate laser to point in direction
+    laserGroup.position.copy(origin);
+
+    // Calculate rotation to align cylinder with direction
+    const up = new THREE.Vector3(0, 1, 0);
+    const quaternion = new THREE.Quaternion();
+    quaternion.setFromUnitVectors(up, direction.clone().normalize());
+    laserGroup.quaternion.copy(quaternion);
+
+    // Offset so laser starts at origin and extends outward
+    const offset = direction.clone().normalize().multiplyScalar(laserLength / 2);
+    laserGroup.position.add(offset);
+
+    // Add point lights along the beam for dramatic effect
+    const startLight = new THREE.PointLight(0xFF0000, 10, 15);
+    startLight.position.set(0, -laserLength / 2, 0);
+    laserGroup.add(startLight);
+
+    const midLight = new THREE.PointLight(0xFF4400, 5, 10);
+    midLight.position.set(0, 0, 0);
+    laserGroup.add(midLight);
+
+    scene.add(laserGroup);
+
+    // Store laser data
+    const laserData = {
+        group: laserGroup,
+        origin: origin.clone(),
+        direction: direction.clone().normalize(),
+        length: laserLength,
+        startTime: performance.now() / 1000,
+        duration: laserDuration,
+        beamMaterial: beamMaterial,
+        coreMaterial: coreMaterial,
+        glowMaterial: glowMaterial,
+        onHitPlayer: onHitPlayer,
+        hasHitPlayer: false
+    };
+
+    activeLasers.push(laserData);
+
+    return laserData;
+}
+
+/**
+ * Updates all active laser beams
+ * @param {number} deltaTime - Time since last frame
+ * @param {THREE.Scene} scene - Scene reference
+ * @param {THREE.Vector3} playerPosition - Player position for collision
+ */
+export function updateLasers(deltaTime, scene, playerPosition) {
+    const currentTime = performance.now() / 1000;
+
+    for (let i = activeLasers.length - 1; i >= 0; i--) {
+        const laser = activeLasers[i];
+        const elapsed = currentTime - laser.startTime;
+        const progress = elapsed / laser.duration;
+
+        if (progress >= 1.0) {
+            // Remove laser
+            scene.remove(laser.group);
+            laser.group.traverse((child) => {
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) child.material.dispose();
+            });
+            activeLasers.splice(i, 1);
+            continue;
+        }
+
+        // Pulsing effect
+        const pulse = Math.sin(elapsed * 20) * 0.2 + 0.8;
+        laser.beamMaterial.opacity = 0.9 * pulse;
+        laser.coreMaterial.opacity = 1.0 * pulse;
+        laser.glowMaterial.opacity = 0.4 * pulse;
+
+        // Fade out near end
+        if (progress > 0.7) {
+            const fadeProgress = (progress - 0.7) / 0.3;
+            laser.beamMaterial.opacity *= (1 - fadeProgress);
+            laser.coreMaterial.opacity *= (1 - fadeProgress);
+            laser.glowMaterial.opacity *= (1 - fadeProgress);
+        }
+
+        // Check collision with player (if not already hit)
+        if (!laser.hasHitPlayer && playerPosition) {
+            // Calculate closest point on laser line to player
+            const laserStart = laser.origin.clone();
+            const laserEnd = laser.origin.clone().add(laser.direction.clone().multiplyScalar(laser.length));
+
+            const playerToStart = playerPosition.clone().sub(laserStart);
+            const laserVec = laserEnd.clone().sub(laserStart);
+            const laserLengthSq = laserVec.lengthSq();
+
+            // Project player position onto laser line
+            const t = Math.max(0, Math.min(1, playerToStart.dot(laserVec) / laserLengthSq));
+            const closestPoint = laserStart.clone().add(laserVec.multiplyScalar(t));
+
+            const distanceToLaser = playerPosition.distanceTo(closestPoint);
+            const hitRadius = 2.5; // Player hit radius
+
+            if (distanceToLaser < hitRadius) {
+                laser.hasHitPlayer = true;
+                if (laser.onHitPlayer) {
+                    laser.onHitPlayer();
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Clears all active lasers
+ * @param {THREE.Scene} scene - Scene to remove lasers from
+ */
+export function clearAllLasers(scene) {
+    for (let i = activeLasers.length - 1; i >= 0; i--) {
+        const laser = activeLasers[i];
+        scene.remove(laser.group);
+        laser.group.traverse((child) => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+        });
+    }
+    activeLasers.length = 0;
+}
+
+/**
+ * Gets all active lasers
+ * @returns {Array} Array of laser objects
+ */
+export function getActiveLasers() {
+    return activeLasers;
 }
 
 /**
