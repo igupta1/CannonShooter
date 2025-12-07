@@ -50,9 +50,6 @@ cd CannonShooter
 # Start a local web server (Python 3)
 python3 -m http.server 8000
 
-# Or use Node.js
-npx http-server -p 8000
-
 # Open in browser
 open http://localhost:8000/public/index.html
 ```
